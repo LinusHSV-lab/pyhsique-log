@@ -1,0 +1,883 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Physique Log</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:        #0e0f11;
+  --bg2:       #15171a;
+  --bg3:       #1c1f23;
+  --border:    #2a2d32;
+  --border2:   #353a40;
+  --text:      #e8eaed;
+  --text2:     #8b8f96;
+  --text3:     #555a62;
+  --accent:    #4fffb0;
+  --accent2:   #ff6b35;
+  --accent3:   #4fa8ff;
+  --red:       #ff4d4d;
+  --card-r:    10px;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; background: var(--bg); color: var(--text); font-family: 'DM Sans', sans-serif; font-size: 14px; }
+
+/* LAYOUT */
+.layout { display: grid; grid-template-columns: 220px 1fr; height: 100vh; overflow: hidden; }
+
+/* SIDEBAR */
+.sidebar {
+  background: var(--bg2);
+  border-right: 1px solid var(--border);
+  display: flex; flex-direction: column;
+  padding: 24px 0;
+  overflow: hidden;
+}
+.sidebar-logo {
+  padding: 0 20px 24px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 16px;
+}
+.sidebar-logo .logo-tag {
+  font-family: 'DM Mono', monospace;
+  font-size: 10px;
+  color: var(--accent);
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  margin-bottom: 4px;
+}
+.sidebar-logo h1 { font-size: 17px; font-weight: 600; color: var(--text); line-height: 1.2; }
+
+.nav-section { padding: 0 12px; margin-bottom: 8px; }
+.nav-label { font-size: 10px; font-family: 'DM Mono', monospace; color: var(--text3); letter-spacing: .1em; text-transform: uppercase; padding: 0 8px; margin-bottom: 6px; }
+.nav-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 9px 10px; border-radius: 7px; cursor: pointer;
+  color: var(--text2); font-size: 13px; font-weight: 400;
+  transition: all .15s;
+}
+.nav-item:hover { background: var(--bg3); color: var(--text); }
+.nav-item.active { background: rgba(79,255,176,.08); color: var(--accent); font-weight: 500; }
+.nav-icon { width: 18px; text-align: center; font-size: 15px; }
+
+.sidebar-footer {
+  margin-top: auto;
+  padding: 16px 20px 0;
+  border-top: 1px solid var(--border);
+}
+.progress-label { display: flex; justify-content: space-between; font-size: 12px; color: var(--text2); margin-bottom: 6px; }
+.progress-bar { height: 4px; background: var(--border2); border-radius: 2px; overflow: hidden; }
+.progress-fill { height: 100%; background: linear-gradient(90deg, var(--accent), var(--accent3)); border-radius: 2px; transition: width .4s ease; }
+.progress-sub { font-size: 11px; font-family: 'DM Mono', monospace; color: var(--text3); margin-top: 5px; }
+
+/* MAIN */
+.main { display: flex; flex-direction: column; overflow: hidden; }
+.topbar {
+  padding: 16px 28px;
+  border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: space-between;
+  background: var(--bg2);
+  flex-shrink: 0;
+}
+.topbar-title { font-size: 15px; font-weight: 500; color: var(--text); }
+.topbar-right { display: flex; align-items: center; gap: 10px; }
+.btn {
+  padding: 7px 14px; border-radius: 7px; border: 1px solid var(--border2);
+  background: var(--bg3); color: var(--text); font-family: 'DM Sans', sans-serif;
+  font-size: 13px; cursor: pointer; transition: all .15s;
+}
+.btn:hover { border-color: var(--border2); background: #22262c; }
+.btn-primary { background: var(--accent); border-color: var(--accent); color: #0a0f0b; font-weight: 600; }
+.btn-primary:hover { background: #3de8a0; border-color: #3de8a0; }
+.btn-danger { background: rgba(255,77,77,.08); border-color: rgba(255,77,77,.25); color: var(--red); }
+.btn-danger:hover { background: rgba(255,77,77,.15); }
+
+.content { flex: 1; overflow-y: auto; padding: 24px 28px; }
+
+/* METRICS */
+.metrics { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 22px; }
+.metric-card {
+  background: var(--bg2); border: 1px solid var(--border);
+  border-radius: var(--card-r); padding: 16px 18px;
+  position: relative; overflow: hidden;
+}
+.metric-card::before {
+  content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px;
+}
+.metric-card.green::before { background: var(--accent); }
+.metric-card.blue::before { background: var(--accent3); }
+.metric-card.orange::before { background: var(--accent2); }
+.metric-card.red::before { background: var(--red); }
+.metric-label { font-size: 11px; font-family: 'DM Mono', monospace; color: var(--text3); text-transform: uppercase; letter-spacing: .08em; margin-bottom: 6px; }
+.metric-value { font-size: 26px; font-weight: 600; color: var(--text); line-height: 1; }
+.metric-unit { font-size: 13px; color: var(--text3); margin-left: 3px; }
+.metric-sub { font-size: 12px; color: var(--text2); margin-top: 4px; }
+.metric-sub.pos { color: var(--accent); }
+.metric-sub.neg { color: var(--red); }
+
+/* GRID 2 COL */
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px; }
+.grid3-1 { display: grid; grid-template-columns: 2fr 1fr; gap: 16px; margin-bottom: 16px; }
+
+/* CARDS */
+.card {
+  background: var(--bg2); border: 1px solid var(--border);
+  border-radius: var(--card-r);
+}
+.card-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 14px 18px; border-bottom: 1px solid var(--border);
+}
+.card-header-title { font-size: 12px; font-family: 'DM Mono', monospace; color: var(--text2); text-transform: uppercase; letter-spacing: .08em; }
+.card-body { padding: 18px; }
+
+/* TABS */
+.tabs { display: flex; gap: 4px; }
+.tab-btn {
+  padding: 4px 12px; border-radius: 5px; border: 1px solid transparent;
+  background: none; color: var(--text2); font-family: 'DM Sans', sans-serif;
+  font-size: 12px; cursor: pointer; transition: all .15s;
+}
+.tab-btn:hover { color: var(--text); background: var(--bg3); }
+.tab-btn.active { background: var(--bg3); border-color: var(--border2); color: var(--text); font-weight: 500; }
+
+/* CHART */
+.chart-wrap { position: relative; height: 220px; }
+
+/* FORM */
+.form-grid { display: grid; grid-template-columns: 1.5fr 1fr 1fr 1fr; gap: 10px; margin-bottom: 12px; }
+.form-group label { display: block; font-size: 11px; font-family: 'DM Mono', monospace; color: var(--text3); text-transform: uppercase; letter-spacing: .07em; margin-bottom: 5px; }
+.form-group input[type=text],
+.form-group input[type=date],
+.form-group input[type=number] {
+  width: 100%; height: 36px; padding: 0 11px;
+  background: var(--bg3); border: 1px solid var(--border2);
+  border-radius: 7px; color: var(--text); font-family: 'DM Sans', sans-serif; font-size: 13px;
+  transition: border-color .15s;
+}
+.form-group input:focus { outline: none; border-color: var(--accent); }
+.form-group input[type=checkbox] { width: 16px; height: 16px; accent-color: var(--accent); cursor: pointer; }
+.form-gym { display: flex; align-items: center; gap: 8px; padding-top: 22px; }
+.form-gym label { font-size: 13px; font-family: 'DM Sans', sans-serif; color: var(--text2); text-transform: none; letter-spacing: 0; cursor: pointer; margin-bottom: 0; }
+.form-actions { display: flex; gap: 8px; align-items: center; }
+
+/* TABLE */
+.table-wrap { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; }
+thead th {
+  font-size: 11px; font-family: 'DM Mono', monospace; color: var(--text3);
+  text-transform: uppercase; letter-spacing: .07em; text-align: left;
+  padding: 8px 12px; border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+tbody tr { transition: background .1s; }
+tbody tr:hover { background: rgba(255,255,255,.025); }
+tbody td {
+  padding: 9px 12px; border-bottom: 1px solid var(--border);
+  font-size: 13px; color: var(--text);
+  white-space: nowrap;
+}
+.avg-row td {
+  background: rgba(79,255,176,.04); color: var(--text2);
+  font-family: 'DM Mono', monospace; font-size: 12px;
+  border-top: 1px solid rgba(79,255,176,.12);
+  border-bottom: 1px solid rgba(79,255,176,.12);
+}
+.gym-badge {
+  display: inline-block; background: rgba(79,168,255,.12);
+  color: var(--accent3); border-radius: 4px;
+  padding: 1px 8px; font-size: 11px; font-family: 'DM Mono', monospace;
+}
+.del-btn {
+  background: none; border: none; cursor: pointer;
+  color: var(--text3); font-size: 15px; padding: 2px 6px;
+  border-radius: 4px; transition: all .1s;
+}
+.del-btn:hover { color: var(--red); background: rgba(255,77,77,.1); }
+.mono { font-family: 'DM Mono', monospace; }
+
+/* WEEK SUMMARY CARDS */
+.week-cards { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; }
+.week-card {
+  background: var(--bg3); border: 1px solid var(--border);
+  border-radius: 8px; padding: 12px 14px;
+}
+.week-card-title { font-size: 10px; font-family: 'DM Mono', monospace; color: var(--text3); letter-spacing: .08em; text-transform: uppercase; margin-bottom: 8px; }
+.week-stat { margin-bottom: 5px; }
+.week-stat-label { font-size: 10px; color: var(--text3); }
+.week-stat-value { font-size: 14px; font-weight: 500; color: var(--text); font-family: 'DM Mono', monospace; }
+.week-delta { font-size: 11px; margin-top: 6px; font-family: 'DM Mono', monospace; }
+.week-delta.pos { color: var(--accent); }
+.week-delta.neg { color: var(--red); }
+
+/* TOAST */
+.toast {
+  position: fixed; bottom: 24px; right: 24px;
+  background: var(--bg3); border: 1px solid var(--border2);
+  border-left: 3px solid var(--accent);
+  color: var(--text); padding: 12px 18px; border-radius: 8px;
+  font-size: 13px; opacity: 0; transform: translateY(8px);
+  transition: all .25s; pointer-events: none; z-index: 999;
+  font-family: 'DM Mono', monospace;
+}
+.toast.show { opacity: 1; transform: translateY(0); }
+
+/* SCROLLBAR */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #444; }
+
+/* VIEWS */
+.view { display: none; }
+.view.active { display: block; }
+
+/* EXPORT AREA */
+.export-note { font-size: 12px; color: var(--text3); font-family: 'DM Mono', monospace; margin-top: 8px; }
+</style>
+</head>
+<body>
+
+<div class="layout">
+
+<!-- SIDEBAR -->
+<aside class="sidebar">
+  <div class="sidebar-logo">
+    <div class="logo-tag">v1.0</div>
+    <h1>Physique Log</h1>
+  </div>
+
+  <nav class="nav-section">
+    <div class="nav-label">Navigation</div>
+    <div class="nav-item active" onclick="showView('dashboard',this)">
+      <span class="nav-icon">◈</span> Dashboard
+    </div>
+    <div class="nav-item" onclick="showView('log',this)">
+      <span class="nav-icon">≡</span> Tageslog
+    </div>
+    <div class="nav-item" onclick="showView('wochen',this)">
+      <span class="nav-icon">◫</span> Wochenübersicht
+    </div>
+    <div class="nav-item" onclick="showView('add',this)">
+      <span class="nav-icon">＋</span> Eintrag hinzufügen
+    </div>
+  </nav>
+
+  <div class="sidebar-footer">
+    <div class="progress-label">
+      <span>Gewichtsverlust</span>
+      <span id="sidebar-progress-pct">–%</span>
+    </div>
+    <div class="progress-bar">
+      <div class="progress-fill" id="sidebar-progress-fill" style="width:0%"></div>
+    </div>
+    <div class="progress-sub" id="sidebar-progress-sub">– kg von – kg Ziel</div>
+  </div>
+</aside>
+
+<!-- MAIN -->
+<main class="main">
+
+  <div class="topbar">
+    <div class="topbar-title" id="topbar-title">Dashboard</div>
+    <div class="topbar-right">
+      <button class="btn" onclick="exportCSV()">⬇ CSV Export</button>
+      <button class="btn" onclick="importFile()">⬆ Import</button>
+      <button class="btn btn-danger" onclick="resetData()">✕ Zurücksetzen</button>
+      <input type="file" id="import-input" accept=".json,.csv" style="display:none" onchange="handleImport(event)">
+    </div>
+  </div>
+
+  <div class="content">
+
+    <!-- DASHBOARD -->
+    <div class="view active" id="view-dashboard">
+
+      <div class="metrics" id="metrics-row"></div>
+
+      <div class="grid3-1">
+        <div class="card">
+          <div class="card-header">
+            <div class="card-header-title">Gewichtsverlauf</div>
+            <div class="tabs" id="chart-tabs">
+              <button class="tab-btn active" onclick="switchChart('weight',this)">Gewicht</button>
+              <button class="tab-btn" onclick="switchChart('kcal',this)">Kalorien</button>
+              <button class="tab-btn" onclick="switchChart('steps',this)">Schritte</button>
+            </div>
+          </div>
+          <div class="card-body">
+            <div class="chart-wrap"><canvas id="mainChart"></canvas></div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header"><div class="card-header-title">Woche-für-Woche</div></div>
+          <div class="card-body" id="weekly-mini" style="padding:12px"></div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- TAGESLOG -->
+    <div class="view" id="view-log">
+      <div class="card">
+        <div class="card-header">
+          <div class="card-header-title">Alle Einträge</div>
+          <span style="font-size:12px;font-family:'DM Mono',monospace;color:var(--text3)" id="log-count"></span>
+        </div>
+        <div class="card-body" style="padding:0">
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Datum</th>
+                  <th>Gewicht</th>
+                  <th>Kalorien</th>
+                  <th>Schritte</th>
+                  <th>Gym</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody id="log-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- WOCHENÜBERSICHT -->
+    <div class="view" id="view-wochen">
+      <div class="card" style="margin-bottom:16px">
+        <div class="card-header"><div class="card-header-title">Wochenvergleich</div></div>
+        <div class="card-body">
+          <div class="week-cards" id="week-cards"></div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-header"><div class="card-header-title">Wochen-Tabelle</div></div>
+        <div class="card-body" style="padding:0">
+          <div class="table-wrap">
+            <table>
+              <thead><tr>
+                <th>Woche</th><th>∅ Gewicht</th><th>Δ Woche</th><th>∅ Kalorien</th><th>∅ Schritte</th><th>Gym-Tage</th>
+              </tr></thead>
+              <tbody id="week-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- EINTRAG HINZUFÜGEN -->
+    <div class="view" id="view-add">
+      <div class="card" style="max-width:620px">
+        <div class="card-header"><div class="card-header-title">Neuer Eintrag</div></div>
+        <div class="card-body">
+          <div class="form-grid">
+            <div class="form-group">
+              <label>Datum</label>
+              <input type="date" id="in-date">
+            </div>
+            <div class="form-group">
+              <label>Gewicht (kg)</label>
+              <input type="number" id="in-weight" placeholder="72.5" step="0.1">
+            </div>
+            <div class="form-group">
+              <label>Kalorien</label>
+              <input type="number" id="in-kcal" placeholder="2400">
+            </div>
+            <div class="form-group">
+              <label>Schritte</label>
+              <input type="number" id="in-steps" placeholder="10000">
+            </div>
+          </div>
+          <div class="form-actions">
+            <div class="form-gym">
+              <input type="checkbox" id="in-gym">
+              <label for="in-gym">Gym-Tag</label>
+            </div>
+            <button class="btn btn-primary" style="margin-left:auto" onclick="addEntry()">Eintrag speichern</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="card" style="max-width:620px;margin-top:16px">
+        <div class="card-header"><div class="card-header-title">Zielgewicht</div></div>
+        <div class="card-body">
+          <div style="display:flex;gap:12px;align-items:flex-end">
+            <div class="form-group" style="flex:1">
+              <label>Zielgewicht (kg)</label>
+              <input type="number" id="goal-input" step="0.1" placeholder="z.B. 69.0">
+            </div>
+            <button class="btn btn-primary" onclick="setGoal()">Setzen</button>
+          </div>
+          <p class="export-note" id="goal-info">Kein Ziel gesetzt</p>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /content -->
+</main>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ─── DATA ───────────────────────────────────────────────────────────────────
+const STORAGE_KEY = 'pql_entries_v3';
+const GOAL_KEY    = 'pql_goal';
+
+const INITIAL = [
+  {date:'2026-04-27',weight:73.3,kcal:2964,steps:7455,gym:false},
+  {date:'2026-04-28',weight:73.3,kcal:3184,steps:12753,gym:true},
+  {date:'2026-04-29',weight:73.2,kcal:2376,steps:15017,gym:true},
+  {date:'2026-04-30',weight:73.1,kcal:2526,steps:14264,gym:false},
+  {date:'2026-05-01',weight:73.2,kcal:3500,steps:24488,gym:false},
+  {date:'2026-05-02',weight:74,  kcal:2605,steps:8208, gym:true},
+  {date:'2026-05-03',weight:72.6,kcal:2582,steps:10345,gym:true},
+  {date:'2026-05-04',weight:73.1,kcal:2847,steps:16728,gym:false},
+  {date:'2026-05-05',weight:72.8,kcal:2580,steps:9842, gym:true},
+  {date:'2026-05-06',weight:73,  kcal:2936,steps:15333,gym:true},
+  {date:'2026-05-07',weight:73.3,kcal:2325,steps:9173, gym:false},
+  {date:'2026-05-08',weight:73,  kcal:2613,steps:14696,gym:true},
+  {date:'2026-05-09',weight:71.9,kcal:2302,steps:12610,gym:true},
+  {date:'2026-05-10',weight:71.6,kcal:2350,steps:6678, gym:false},
+  {date:'2026-05-11',weight:72.5,kcal:2539,steps:10746,gym:false},
+  {date:'2026-05-12',weight:72.4,kcal:2578,steps:10707,gym:true},
+  {date:'2026-05-13',weight:72.1,kcal:2329,steps:10507,gym:false},
+  {date:'2026-05-14',weight:72.2,kcal:2372,steps:7217, gym:true},
+  {date:'2026-05-15',weight:72.1,kcal:2443,steps:6740, gym:true},
+  {date:'2026-05-16',weight:72.1,kcal:2546,steps:8647, gym:true},
+  {date:'2026-05-17',weight:72.1,kcal:2471,steps:3374, gym:false},
+  {date:'2026-05-18',weight:71.6,kcal:2489,steps:11288,gym:false},
+  {date:'2026-05-19',weight:71.8,kcal:2512,steps:13802,gym:true},
+  {date:'2026-05-20',weight:71.2,kcal:2545,steps:16120,gym:true},
+  {date:'2026-05-21',weight:71.2,kcal:2168,steps:3064, gym:false},
+  {date:'2026-05-22',weight:71.5,kcal:3952,steps:19199,gym:true},
+  {date:'2026-05-23',weight:71.9,kcal:3088,steps:16361,gym:true},
+  {date:'2026-05-24',weight:71.3,kcal:2332,steps:4811, gym:false},
+  {date:'2026-05-25',weight:71.1,kcal:2509,steps:8123, gym:true},
+  {date:'2026-05-26',weight:70.7,kcal:2612,steps:11420,gym:false},
+  {date:'2026-05-27',weight:70.9,kcal:2512,steps:11321,gym:true},
+  {date:'2026-05-28',weight:70.3,kcal:2331,steps:9302, gym:false},
+  {date:'2026-05-29',weight:71.5,kcal:null,steps:null,  gym:true},
+];
+
+let entries = [];
+let goal    = null;
+let mainChart = null;
+let activeTab = 'weight';
+
+function save() {
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(entries)); } catch(e) {}
+}
+function saveGoal() {
+  try { localStorage.setItem(GOAL_KEY, goal); } catch(e) {}
+}
+function load() {
+  try {
+    const s = localStorage.getItem(STORAGE_KEY);
+    entries = s ? JSON.parse(s) : [...INITIAL];
+    const g = localStorage.getItem(GOAL_KEY);
+    goal = g ? parseFloat(g) : null;
+  } catch(e) {
+    entries = [...INITIAL];
+  }
+}
+
+// ─── HELPERS ────────────────────────────────────────────────────────────────
+function avgVal(arr, key) {
+  const v = arr.filter(e => e[key] != null && !isNaN(e[key]));
+  return v.length ? v.reduce((s,e) => s + e[key], 0) / v.length : null;
+}
+function fmtDate(d) {
+  const [y,m,day] = d.split('-');
+  const names = ['Jan','Feb','Mär','Apr','Mai','Jun','Jul','Aug','Sep','Okt','Nov','Dez'];
+  return `${parseInt(day)}. ${names[parseInt(m)-1]}`;
+}
+function fmtDateFull(d) {
+  const [y,m,day] = d.split('-');
+  const wn = ['So','Mo','Di','Mi','Do','Fr','Sa'];
+  const wd = new Date(d).getDay();
+  const names = ['Januar','Februar','März','April','Mai','Juni','Juli','August','September','Oktober','November','Dezember'];
+  return `${wn[wd]}, ${parseInt(day)}. ${names[parseInt(m)-1]} ${y}`;
+}
+function groupByWeek(data) {
+  const weeks = []; let w = [];
+  data.forEach((e,i) => {
+    w.push(e);
+    if(w.length === 7 || i === data.length-1) { weeks.push(w); w = []; }
+  });
+  return weeks;
+}
+function toast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  setTimeout(() => el.classList.remove('show'), 2500);
+}
+
+// ─── VIEWS ──────────────────────────────────────────────────────────────────
+const viewTitles = { dashboard:'Dashboard', log:'Tageslog', wochen:'Wochenübersicht', add:'Eintrag hinzufügen' };
+function showView(name, el) {
+  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+  document.getElementById('view-'+name).classList.add('active');
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  if(el) el.classList.add('active');
+  document.getElementById('topbar-title').textContent = viewTitles[name];
+  if(name === 'add') {
+    document.getElementById('in-date').value = new Date().toISOString().split('T')[0];
+    if(goal) {
+      document.getElementById('goal-input').value = goal;
+      updateGoalInfo();
+    }
+  }
+}
+
+// ─── METRICS ────────────────────────────────────────────────────────────────
+function renderMetrics() {
+  const d = entries;
+  if(!d.length) return;
+  const withW = d.filter(e => e.weight != null);
+  const start = withW[0].weight;
+  const current = withW[withW.length-1].weight;
+  const loss = start - current;
+  const kcalAvg = avgVal(d.filter(e=>e.kcal), 'kcal');
+  const stepsAvg = avgVal(d.filter(e=>e.steps), 'steps');
+  const gymDays = d.filter(e=>e.gym).length;
+
+  const goalPct = goal ? Math.min(100, Math.max(0, loss / (start - goal) * 100)) : null;
+
+  // sidebar progress
+  if(goal) {
+    const needed = start - goal;
+    const pct = Math.min(100, Math.max(0, loss / needed * 100));
+    document.getElementById('sidebar-progress-fill').style.width = pct + '%';
+    document.getElementById('sidebar-progress-pct').textContent = pct.toFixed(0) + '%';
+    document.getElementById('sidebar-progress-sub').textContent = `-${Math.abs(loss).toFixed(1)} kg / -${needed.toFixed(1)} kg Ziel`;
+  } else {
+    document.getElementById('sidebar-progress-fill').style.width = '0%';
+    document.getElementById('sidebar-progress-pct').textContent = '– %';
+    document.getElementById('sidebar-progress-sub').textContent = 'Kein Ziel gesetzt';
+  }
+
+  const rows = [
+    {label:'Aktuelles Gewicht', value: current.toFixed(1), unit:'kg', sub: `Start: ${start.toFixed(1)} kg`, cls:'green'},
+    {label:'Gesamtverlust',     value: (loss>=0?'-':'+')+Math.abs(loss).toFixed(1), unit:'kg', sub:`über ${d.length} Tage`, cls: loss>0?'green':'red'},
+    {label:'∅ Kalorien/Tag',   value: kcalAvg ? Math.round(kcalAvg).toLocaleString() : '–', unit:'kcal', sub:`∅ ${stepsAvg ? Math.round(stepsAvg).toLocaleString():'-'} Schritte/Tag`, cls:'blue'},
+    {label:'Gym-Tage',         value: gymDays, unit:'', sub:`von ${d.length} Tagen (${Math.round(gymDays/d.length*100)}%)`, cls:'orange'},
+  ];
+  const container = document.getElementById('metrics-row');
+  container.innerHTML = rows.map(r => `
+    <div class="metric-card ${r.cls}">
+      <div class="metric-label">${r.label}</div>
+      <div class="metric-value">${r.value}<span class="metric-unit">${r.unit}</span></div>
+      <div class="metric-sub">${r.sub}</div>
+    </div>
+  `).join('');
+}
+
+// ─── CHART ──────────────────────────────────────────────────────────────────
+function switchChart(tab, el) {
+  activeTab = tab;
+  document.querySelectorAll('#chart-tabs .tab-btn').forEach(b => b.classList.remove('active'));
+  el.classList.add('active');
+  renderChart();
+}
+
+function renderChart() {
+  const data = entries;
+  if(!data.length) return;
+
+  const labels = data.map(e => fmtDate(e.date));
+  let vals, color, yLabel, unit;
+  if(activeTab === 'weight')  { vals = data.map(e=>e.weight); color='#4fffb0'; yLabel='kg'; unit='kg'; }
+  else if(activeTab === 'kcal') { vals = data.map(e=>e.kcal);   color='#ff6b35'; yLabel='kcal'; unit='kcal'; }
+  else                         { vals = data.map(e=>e.steps);   color='#4fa8ff'; yLabel='Schritte'; unit=''; }
+
+  if(mainChart) mainChart.destroy();
+  const ctx = document.getElementById('mainChart').getContext('2d');
+
+  const grad = ctx.createLinearGradient(0, 0, 0, 200);
+  grad.addColorStop(0, color + '30');
+  grad.addColorStop(1, color + '00');
+
+  mainChart = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [{
+        data: vals,
+        borderColor: color,
+        backgroundColor: grad,
+        pointBackgroundColor: data.map(e => e.gym ? '#ff6b35' : color),
+        pointBorderColor: data.map(e => e.gym ? '#ff6b35' : color),
+        pointRadius: data.map(e => e.gym ? 6 : 4),
+        pointHoverRadius: 7,
+        tension: 0.4, fill: true, borderWidth: 2, spanGaps: true
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: '#1c1f23',
+          borderColor: '#353a40',
+          borderWidth: 1,
+          titleColor: '#8b8f96',
+          bodyColor: '#e8eaed',
+          titleFont: { family: 'DM Mono', size: 11 },
+          bodyFont: { family: 'DM Mono', size: 12 },
+          callbacks: {
+            title: ctx => fmtDate(data[ctx[0].dataIndex].date) + (data[ctx[0].dataIndex].gym ? ' 🏋️' : ''),
+            label: ctx => ctx.parsed.y != null ? ` ${ctx.parsed.y.toLocaleString('de-DE')} ${unit}` : ' –'
+          }
+        }
+      },
+      scales: {
+        x: {
+          ticks: { color: '#555a62', font: { family: 'DM Mono', size: 10 }, maxRotation: 45, autoSkip: true, maxTicksLimit: 14 },
+          grid: { color: 'rgba(255,255,255,0.04)' }
+        },
+        y: {
+          ticks: { color: '#555a62', font: { family: 'DM Mono', size: 11 } },
+          grid: { color: 'rgba(255,255,255,0.04)' },
+          title: { display: true, text: yLabel, color: '#555a62', font: { family: 'DM Mono', size: 11 } }
+        }
+      }
+    }
+  });
+}
+
+// ─── WEEKLY MINI ────────────────────────────────────────────────────────────
+function renderWeeklyMini() {
+  const weeks = groupByWeek(entries);
+  const container = document.getElementById('weekly-mini');
+  container.innerHTML = weeks.map((w, i) => {
+    const aw = avgVal(w, 'weight');
+    const ak = avgVal(w, 'kcal');
+    const prevWeek = weeks[i-1];
+    const prevAw = prevWeek ? avgVal(prevWeek, 'weight') : null;
+    let delta;
+    if(i === 0) {
+      const firstW = w.find(e => e.weight != null)?.weight ?? null;
+      const lastW  = [...w].reverse().find(e => e.weight != null)?.weight ?? null;
+      delta = (firstW != null && lastW != null) ? lastW - firstW : null;
+    } else {
+      delta = (aw != null && prevAw != null) ? aw - prevAw : null;
+    }
+    const deltaStr = delta != null
+      ? `<span class="week-delta ${delta<0?'pos':'neg'}">${delta>0?'+':''}${delta.toFixed(2)} kg</span>`
+      : `<span class="week-delta" style="color:var(--text3)">–</span>`;
+    return `
+      <div style="padding:10px 0;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center">
+        <div>
+          <div style="font-size:11px;font-family:'DM Mono',monospace;color:var(--text3);margin-bottom:3px">WOCHE ${i+1}</div>
+          <div style="font-size:15px;font-weight:500;font-family:'DM Mono',monospace;color:var(--text)">${aw != null ? aw.toFixed(2) : '–'} <span style="font-size:11px;color:var(--text3)">kg</span></div>
+          ${deltaStr}
+        </div>
+        <div style="text-align:right">
+          <div style="font-size:11px;color:var(--text3)">${ak != null ? Math.round(ak).toLocaleString() : '–'} kcal</div>
+          <div style="font-size:11px;color:var(--accent3)">${w.filter(e=>e.gym).length}× Gym</div>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+// ─── LOG TABLE ──────────────────────────────────────────────────────────────
+function renderLog() {
+  document.getElementById('log-count').textContent = entries.length + ' Einträge';
+  const tbody = document.getElementById('log-tbody');
+  const weeks = groupByWeek(entries);
+  let rows = '';
+  weeks.forEach((week, wi) => {
+    week.forEach(e => {
+      rows += `<tr>
+        <td class="mono" style="color:var(--text2);font-size:12px">${fmtDate(e.date)}</td>
+        <td class="mono">${e.weight != null ? e.weight.toFixed(1) : '–'}</td>
+        <td class="mono">${e.kcal != null ? e.kcal.toLocaleString() : '–'}</td>
+        <td class="mono">${e.steps != null ? e.steps.toLocaleString() : '–'}</td>
+        <td>${e.gym ? '<span class="gym-badge">Gym</span>' : ''}</td>
+        <td><button class="del-btn" onclick="deleteEntry('${e.date}')" title="Löschen">×</button></td>
+      </tr>`;
+    });
+    const aw = avgVal(week,'weight'), ak = avgVal(week,'kcal'), as2 = avgVal(week,'steps');
+    rows += `<tr class="avg-row">
+      <td>∅ Woche ${wi+1}</td>
+      <td>${aw!=null?aw.toFixed(2):'–'}</td>
+      <td>${ak!=null?Math.round(ak).toLocaleString():'–'}</td>
+      <td>${as2!=null?Math.round(as2).toLocaleString():'–'}</td>
+      <td colspan="2"></td>
+    </tr>`;
+  });
+  tbody.innerHTML = rows;
+}
+
+// ─── WEEKS TABLE ────────────────────────────────────────────────────────────
+function renderWeeks() {
+  const weeks = groupByWeek(entries);
+
+  // cards
+  const cards = document.getElementById('week-cards');
+  cards.innerHTML = weeks.map((w, i) => {
+    const aw = avgVal(w,'weight'), ak = avgVal(w,'kcal'), as2 = avgVal(w,'steps');
+    const prevAw = i>0 ? avgVal(weeks[i-1],'weight') : null;
+    const delta = (aw!=null && prevAw!=null) ? aw - prevAw : null;
+    return `<div class="week-card">
+      <div class="week-card-title">Woche ${i+1}</div>
+      <div class="week-stat">
+        <div class="week-stat-label">∅ Gewicht</div>
+        <div class="week-stat-value">${aw!=null?aw.toFixed(2):'–'} <span style="font-size:10px;color:var(--text3)">kg</span></div>
+      </div>
+      <div class="week-stat">
+        <div class="week-stat-label">∅ Kalorien</div>
+        <div class="week-stat-value" style="font-size:12px">${ak!=null?Math.round(ak).toLocaleString():'–'}</div>
+      </div>
+      <div class="week-stat">
+        <div class="week-stat-label">Gym-Tage</div>
+        <div class="week-stat-value" style="font-size:12px">${w.filter(e=>e.gym).length} / ${w.length}</div>
+      </div>
+      ${delta!=null ? `<div class="week-delta ${delta<0?'pos':'neg'}">${delta>0?'▲':'▼'} ${Math.abs(delta).toFixed(2)} kg</div>` : ''}
+    </div>`;
+  }).join('');
+
+  // table
+  const tbody = document.getElementById('week-tbody');
+  tbody.innerHTML = weeks.map((w, i) => {
+    const aw = avgVal(w,'weight'), ak = avgVal(w,'kcal'), as2 = avgVal(w,'steps');
+    const prevAw = i>0 ? avgVal(weeks[i-1],'weight') : null;
+    const delta = (aw!=null && prevAw!=null) ? aw - prevAw : null;
+    const deltaHtml = delta!=null
+      ? `<span style="font-family:'DM Mono',monospace;font-size:12px;color:${delta<0?'var(--accent)':'var(--red)'}">${delta>0?'+':''}${delta.toFixed(2)}</span>`
+      : '–';
+    return `<tr>
+      <td class="mono" style="color:var(--text2)">Woche ${i+1}</td>
+      <td class="mono">${aw!=null?aw.toFixed(2):'–'}</td>
+      <td>${deltaHtml}</td>
+      <td class="mono">${ak!=null?Math.round(ak).toLocaleString():'–'}</td>
+      <td class="mono">${as2!=null?Math.round(as2).toLocaleString():'–'}</td>
+      <td class="mono" style="color:var(--accent3)">${w.filter(e=>e.gym).length}</td>
+    </tr>`;
+  }).join('');
+}
+
+// ─── ACTIONS ────────────────────────────────────────────────────────────────
+function resetData() {
+  if(!confirm("Alle Daten löschen und neu starten? Das kann nicht rückgängig gemacht werden.")) return;
+  entries = [];
+  goal = null;
+  try { localStorage.removeItem(STORAGE_KEY); localStorage.removeItem(GOAL_KEY); } catch(e) {}
+  renderAll();
+  toast("✓ Daten zurückgesetzt");
+}
+function addEntry() {
+  const date   = document.getElementById('in-date').value;
+  const weight = parseFloat(document.getElementById('in-weight').value);
+  const kcal   = parseInt(document.getElementById('in-kcal').value)   || null;
+  const steps  = parseInt(document.getElementById('in-steps').value)  || null;
+  const gym    = document.getElementById('in-gym').checked;
+
+  if(!date || isNaN(weight)) { toast('⚠ Datum und Gewicht sind Pflichtfelder'); return; }
+
+  const idx = entries.findIndex(e => e.date === date);
+  if(idx >= 0) { entries[idx] = {date,weight,kcal,steps,gym}; toast('✓ Eintrag aktualisiert'); }
+  else         { entries.push({date,weight,kcal,steps,gym}); toast('✓ Eintrag gespeichert'); }
+
+  entries.sort((a,b) => a.date.localeCompare(b.date));
+  save(); renderAll();
+
+  document.getElementById('in-weight').value = '';
+  document.getElementById('in-kcal').value   = '';
+  document.getElementById('in-steps').value  = '';
+  document.getElementById('in-gym').checked  = false;
+}
+
+function deleteEntry(date) {
+  if(!confirm(`Eintrag vom ${fmtDate(date)} wirklich löschen?`)) return;
+  entries = entries.filter(e => e.date !== date);
+  save(); renderAll(); toast('✓ Eintrag gelöscht');
+}
+
+function setGoal() {
+  const v = parseFloat(document.getElementById('goal-input').value);
+  if(isNaN(v)) { toast('⚠ Bitte gültiges Gewicht eingeben'); return; }
+  goal = v; saveGoal(); updateGoalInfo();
+  renderMetrics(); toast('✓ Ziel gesetzt: ' + v + ' kg');
+}
+
+function updateGoalInfo() {
+  const el = document.getElementById('goal-info');
+  if(!goal || !entries.length) { el.textContent = 'Kein Ziel gesetzt'; return; }
+  const withW = entries.filter(e=>e.weight!=null);
+  const current = withW[withW.length-1].weight;
+  const remaining = current - goal;
+  el.textContent = remaining > 0
+    ? `Noch ${remaining.toFixed(1)} kg bis zum Ziel (${goal} kg)`
+    : `Ziel erreicht! 🎉`;
+}
+
+// ─── EXPORT / IMPORT ────────────────────────────────────────────────────────
+function exportCSV() {
+  const lines = ['Datum,Gewicht (kg),Kalorien,Schritte,Gym'];
+  entries.forEach(e => {
+    lines.push([e.date, e.weight ?? '', e.kcal ?? '', e.steps ?? '', e.gym ? 'Ja' : 'Nein'].join(','));
+  });
+  const blob = new Blob([lines.join('\n')], {type:'text/csv'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'physique_log_export.csv';
+  a.click();
+  toast('✓ CSV exportiert');
+}
+
+function importFile() {
+  document.getElementById('import-input').click();
+}
+
+function handleImport(event) {
+  const file = event.target.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const text = e.target.result;
+      if(file.name.endsWith('.json')) {
+        const parsed = JSON.parse(text);
+        if(Array.isArray(parsed)) { entries = parsed; save(); renderAll(); toast(`✓ ${parsed.length} Einträge importiert`); }
+      } else if(file.name.endsWith('.csv')) {
+        const rows = text.trim().split('\n').slice(1);
+        const imported = rows.map(row => {
+          const [date,weight,kcal,steps,gym] = row.split(',');
+          return { date: date.trim(), weight: parseFloat(weight)||null, kcal: parseInt(kcal)||null, steps: parseInt(steps)||null, gym: gym?.trim()==='Ja' };
+        }).filter(r => r.date && r.weight);
+        entries = imported.sort((a,b)=>a.date.localeCompare(b.date));
+        save(); renderAll(); toast(`✓ ${imported.length} Einträge importiert`);
+      }
+    } catch(err) { toast('⚠ Import fehlgeschlagen'); }
+  };
+  reader.readAsText(file);
+  event.target.value = '';
+}
+
+// ─── RENDER ALL ─────────────────────────────────────────────────────────────
+function renderAll() {
+  renderMetrics();
+  renderChart();
+  renderWeeklyMini();
+  renderLog();
+  renderWeeks();
+}
+
+// ─── INIT ───────────────────────────────────────────────────────────────────
+load();
+document.getElementById('in-date').value = new Date().toISOString().split('T')[0];
+if(goal) { document.getElementById('goal-input').value = goal; updateGoalInfo(); }
+renderAll();
+</script>
+</body>
+</html>
