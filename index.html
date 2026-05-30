@@ -409,6 +409,17 @@ tbody td {
       <div class="card" style="max-width:620px;margin-top:16px">
         <div class="card-header"><div class="card-header-title">Ziele</div></div>
         <div class="card-body">
+          <div style="margin-bottom:16px">
+            <div class="form-group" style="margin-bottom:0">
+              <label>Modus</label>
+            </div>
+            <div style="display:flex;gap:8px;margin-top:6px">
+              <button id="mode-cut" class="btn btn-primary" style="flex:1" onclick="setWeightMode('cut')">🔻 Abnehmen (Cut)</button>
+              <button id="mode-bulk" class="btn" style="flex:1" onclick="setWeightMode('bulk')">🔺 Zunehmen (Bulk)</button>
+              <button id="mode-maintain" class="btn" style="flex:1" onclick="setWeightMode('maintain')">➡ Halten</button>
+            </div>
+            <p class="export-note" id="mode-info" style="margin-top:6px">Modus: Abnehmen — Gewichtsverlust wird grün markiert</p>
+          </div>
           <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px">
             <div>
               <div class="form-group">
@@ -497,6 +508,7 @@ let goal    = null;
 let kcalGoal = null;
 let kcalGoalType = 'max'; // 'max' or 'min'
 let stepsGoal = null;
+let weightMode = 'cut'; // 'cut' = losing is good, 'bulk' = gaining is good
 let mainChart = null;
 let activeTab = 'weight';
 
@@ -516,6 +528,7 @@ function load() {
     const kg2 = localStorage.getItem(KCAL_GOAL_KEY);
     kcalGoal = kg2 ? parseInt(kg2) : null;
     kcalGoalType = localStorage.getItem('pql_kcal_goal_type') || 'max';
+    weightMode = localStorage.getItem('pql_weight_mode') || 'cut';
     const sg = localStorage.getItem(STEPS_GOAL_KEY);
     stepsGoal = sg ? parseInt(sg) : null;
   } catch(e) {
@@ -567,6 +580,7 @@ function showView(name, el) {
     document.getElementById('in-date').value = new Date().toISOString().split('T')[0];
     if(goal) { document.getElementById('goal-input').value = goal; updateGoalInfo(); }
     if(kcalGoal) { document.getElementById('kcal-goal-input').value = kcalGoal; const tl = kcalGoalType === 'max' ? 'Max' : 'Min'; document.getElementById('kcal-goal-info').textContent = `${tl}: ${kcalGoal.toLocaleString()} kcal/Tag`; selectKcalType(kcalGoalType); }
+    setWeightMode(weightMode);
     if(stepsGoal) { document.getElementById('steps-goal-input').value = stepsGoal; document.getElementById('steps-goal-info').textContent = `Ziel: ${stepsGoal.toLocaleString()} Schritte/Tag`; }
   }
 }
@@ -705,7 +719,7 @@ function renderWeeklyMini() {
       delta = (aw != null && prevAw != null) ? aw - prevAw : null;
     }
     const deltaStr = delta != null
-      ? `<span class="week-delta ${delta<0?'pos':'neg'}">${delta>0?'+':''}${delta.toFixed(2)} kg</span>`
+      ? `<span class="week-delta ${deltaClass(delta)}" style="color:${deltaColor(delta)}">${delta>0?'+':''}${delta.toFixed(2)} kg</span>`
       : `<span class="week-delta" style="color:var(--text3)">–</span>`;
     return `
       <div style="padding:10px 0;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center">
@@ -781,7 +795,7 @@ function renderWeeks() {
         <div class="week-stat-label">Gym-Tage</div>
         <div class="week-stat-value" style="font-size:12px">${w.filter(e=>e.gym).length} / ${w.length}</div>
       </div>
-      ${delta!=null ? `<div class="week-delta ${delta<0?'pos':'neg'}">${delta>0?'▲':'▼'} ${Math.abs(delta).toFixed(2)} kg</div>` : ''}
+      ${delta!=null ? `<div class="week-delta" style="color:${deltaColor(delta)}">${delta>0?'▲':'▼'} ${Math.abs(delta).toFixed(2)} kg</div>` : ''}
     </div>`;
   }).join('');
 
@@ -792,7 +806,7 @@ function renderWeeks() {
     const prevAw = i>0 ? avgVal(weeks[i-1],'weight') : null;
     const delta = (aw!=null && prevAw!=null) ? aw - prevAw : null;
     const deltaHtml = delta!=null
-      ? `<span style="font-family:'DM Mono',monospace;font-size:12px;color:${delta<0?'var(--accent)':'var(--red)'}">${delta>0?'+':''}${delta.toFixed(2)}</span>`
+      ? `<span style="font-family:'DM Mono',monospace;font-size:12px;color:${deltaColor(delta)}">${delta>0?'+':''}${delta.toFixed(2)}</span>`
       : '–';
     return `<tr>
       <td class="mono" style="color:var(--text2)">Woche ${i+1}</td>
@@ -851,6 +865,36 @@ function setGoal() {
   if(isNaN(v)) { toast('⚠ Bitte gültiges Gewicht eingeben'); return; }
   goal = v; saveGoal(); updateGoalInfo();
   renderMetrics(); toast('✓ Ziel gesetzt: ' + v + ' kg');
+}
+
+function setWeightMode(mode) {
+  weightMode = mode;
+  try { localStorage.setItem('pql_weight_mode', mode); } catch(e) {}
+  ['cut','bulk','maintain'].forEach(m => {
+    const btn = document.getElementById('mode-' + m);
+    if(btn) btn.className = m === mode ? 'btn btn-primary' : 'btn';
+    if(btn) btn.style.flex = '1';
+  });
+  const labels = { cut:'Abnehmen — Gewichtsverlust wird grün markiert', bulk:'Zunehmen — Gewichtszunahme wird grün markiert', maintain:'Halten — Veränderungen werden neutral angezeigt' };
+  const el = document.getElementById('mode-info');
+  if(el) el.textContent = 'Modus: ' + labels[mode];
+  renderAll();
+}
+
+function deltaColor(delta) {
+  if(delta === null) return '';
+  if(weightMode === 'maintain') return delta === 0 ? 'var(--accent)' : 'var(--accent3)';
+  if(weightMode === 'cut') return delta < 0 ? 'var(--accent)' : 'var(--red)';
+  if(weightMode === 'bulk') return delta > 0 ? 'var(--accent)' : 'var(--red)';
+  return '';
+}
+
+function deltaClass(delta) {
+  if(delta === null) return '';
+  if(weightMode === 'maintain') return '';
+  if(weightMode === 'cut') return delta < 0 ? 'pos' : 'neg';
+  if(weightMode === 'bulk') return delta > 0 ? 'pos' : 'neg';
+  return '';
 }
 
 function selectKcalType(type) {
