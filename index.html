@@ -414,9 +414,9 @@ tbody td {
               <label>Modus</label>
             </div>
             <div style="display:flex;gap:8px;margin-top:6px">
-              <button id="mode-cut" class="btn btn-primary" style="flex:1" onclick="setWeightMode('cut')">🔻 Abnehmen (Cut)</button>
-              <button id="mode-bulk" class="btn" style="flex:1" onclick="setWeightMode('bulk')">🔺 Zunehmen (Bulk)</button>
-              <button id="mode-maintain" class="btn" style="flex:1" onclick="setWeightMode('maintain')">➡ Halten</button>
+              <button id="mode-cut" class="btn btn-primary" style="flex:1" onclick="setWeightMode('cut')">🔻 Cut</button>
+              <button id="mode-bulk" class="btn" style="flex:1" onclick="setWeightMode('bulk')">🔺 Bulk</button>
+              <button id="mode-reverse" class="btn" style="flex:1" onclick="setWeightMode('reverse')">🔄 Reverse Diät</button>
             </div>
             <p class="export-note" id="mode-info" style="margin-top:6px">Modus: Abnehmen — Gewichtsverlust wird grün markiert</p>
           </div>
@@ -508,7 +508,8 @@ let goal    = null;
 let kcalGoal = null;
 let kcalGoalType = 'max'; // 'max' or 'min'
 let stepsGoal = null;
-let weightMode = 'cut'; // 'cut' = losing is good, 'bulk' = gaining is good
+let weightMode = 'cut'; // 'cut'|'bulk'|'reverse'
+let weekModes = {}; // { weekIndex: mode } — per-week mode overrides
 let mainChart = null;
 let activeTab = 'weight';
 
@@ -529,6 +530,7 @@ function load() {
     kcalGoal = kg2 ? parseInt(kg2) : null;
     kcalGoalType = localStorage.getItem('pql_kcal_goal_type') || 'max';
     weightMode = localStorage.getItem('pql_weight_mode') || 'cut';
+    try { weekModes = JSON.parse(localStorage.getItem('pql_week_modes') || '{}'); } catch(e) { weekModes = {}; }
     const sg = localStorage.getItem(STEPS_GOAL_KEY);
     stepsGoal = sg ? parseInt(sg) : null;
   } catch(e) {
@@ -580,7 +582,7 @@ function showView(name, el) {
     document.getElementById('in-date').value = new Date().toISOString().split('T')[0];
     if(goal) { document.getElementById('goal-input').value = goal; updateGoalInfo(); }
     if(kcalGoal) { document.getElementById('kcal-goal-input').value = kcalGoal; const tl = kcalGoalType === 'max' ? 'Max' : 'Min'; document.getElementById('kcal-goal-info').textContent = `${tl}: ${kcalGoal.toLocaleString()} kcal/Tag`; selectKcalType(kcalGoalType); }
-    setWeightMode(weightMode);
+    setWeightMode(weightMode); // restore global mode buttons
     if(stepsGoal) { document.getElementById('steps-goal-input').value = stepsGoal; document.getElementById('steps-goal-info').textContent = `Ziel: ${stepsGoal.toLocaleString()} Schritte/Tag`; }
   }
 }
@@ -718,13 +720,14 @@ function renderWeeklyMini() {
     } else {
       delta = (aw != null && prevAw != null) ? aw - prevAw : null;
     }
+    const wMode = modeForWeek(i);
     const deltaStr = delta != null
-      ? `<span class="week-delta ${deltaClass(delta)}" style="color:${deltaColor(delta)}">${delta>0?'+':''}${delta.toFixed(2)} kg</span>`
+      ? `<span class="week-delta ${deltaClass(delta, wMode)}" style="color:${deltaColor(delta, wMode)}">${delta>0?'+':''}${delta.toFixed(2)} kg</span>`
       : `<span class="week-delta" style="color:var(--text3)">–</span>`;
     return `
       <div style="padding:10px 0;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center">
         <div>
-          <div style="font-size:11px;font-family:'DM Mono',monospace;color:var(--text3);margin-bottom:3px">WOCHE ${i+1}</div>
+          <div style="font-size:11px;font-family:'DM Mono',monospace;color:var(--text3);margin-bottom:3px">WOCHE ${i+1} <span style="color:var(--text3);font-size:10px">${weekModes[i]?'('+modeLabel(weekModes[i])+'  )':''}</span></div>
           <div style="font-size:15px;font-weight:500;font-family:'DM Mono',monospace;color:var(--text)">${aw != null ? aw.toFixed(2) : '–'} <span style="font-size:11px;color:var(--text3)">kg</span></div>
           ${deltaStr}
         </div>
@@ -795,8 +798,13 @@ function renderWeeks() {
         <div class="week-stat-label">Gym-Tage</div>
         <div class="week-stat-value" style="font-size:12px">${w.filter(e=>e.gym).length} / ${w.length}</div>
       </div>
-      ${delta!=null ? `<div class="week-delta" style="color:${deltaColor(delta)}">${delta>0?'▲':'▼'} ${Math.abs(delta).toFixed(2)} kg</div>` : ''}
-    </div>`;
+      ${delta!=null ? `<div class="week-delta" style="color:${deltaColor(delta, modeForWeek(i))}">${delta>0?'▲':'▼'} ${Math.abs(delta).toFixed(2)} kg</div>` : ''}
+      <div style="margin-top:8px;display:flex;gap:4px">
+        <button onclick="setWeightMode('cut',${i})" class="btn ${modeForWeek(i)==='cut'?'btn-primary':''}" style="flex:1;padding:3px 0;font-size:10px" title="Cut">🔻</button>
+        <button onclick="setWeightMode('bulk',${i})" class="btn ${modeForWeek(i)==='bulk'?'btn-primary':''}" style="flex:1;padding:3px 0;font-size:10px" title="Bulk">🔺</button>
+        <button onclick="setWeightMode('reverse',${i})" class="btn ${modeForWeek(i)==='reverse'?'btn-primary':''}" style="flex:1;padding:3px 0;font-size:10px" title="Reverse">🔄</button>
+      </div>
+    </div>`; 
   }).join('');
 
   // table
@@ -806,7 +814,7 @@ function renderWeeks() {
     const prevAw = i>0 ? avgVal(weeks[i-1],'weight') : null;
     const delta = (aw!=null && prevAw!=null) ? aw - prevAw : null;
     const deltaHtml = delta!=null
-      ? `<span style="font-family:'DM Mono',monospace;font-size:12px;color:${deltaColor(delta)}">${delta>0?'+':''}${delta.toFixed(2)}</span>`
+      ? `<span style="font-family:'DM Mono',monospace;font-size:12px;color:${deltaColor(delta, modeForWeek(i))}">` + (delta>0?'+':'') + delta.toFixed(2) + `</span>`
       : '–';
     return `<tr>
       <td class="mono" style="color:var(--text2)">Woche ${i+1}</td>
@@ -867,33 +875,50 @@ function setGoal() {
   renderMetrics(); toast('✓ Ziel gesetzt: ' + v + ' kg');
 }
 
-function setWeightMode(mode) {
+function setWeightMode(mode, weekIdx) {
+  if(weekIdx !== undefined) {
+    // Set mode for specific week only
+    weekModes[weekIdx] = mode;
+    try { localStorage.setItem('pql_week_modes', JSON.stringify(weekModes)); } catch(e) {}
+    renderAll();
+    toast('✓ Woche ' + (weekIdx+1) + ': Modus auf ' + modeLabel(mode) + ' gesetzt');
+    return;
+  }
   weightMode = mode;
   try { localStorage.setItem('pql_weight_mode', mode); } catch(e) {}
-  ['cut','bulk','maintain'].forEach(m => {
+  ['cut','bulk','reverse'].forEach(m => {
     const btn = document.getElementById('mode-' + m);
     if(btn) btn.className = m === mode ? 'btn btn-primary' : 'btn';
     if(btn) btn.style.flex = '1';
   });
-  const labels = { cut:'Abnehmen — Gewichtsverlust wird grün markiert', bulk:'Zunehmen — Gewichtszunahme wird grün markiert', maintain:'Halten — Veränderungen werden neutral angezeigt' };
   const el = document.getElementById('mode-info');
-  if(el) el.textContent = 'Modus: ' + labels[mode];
+  if(el) el.textContent = 'Standard-Modus: ' + modeLabel(mode) + ' (gilt für alle Wochen ohne eigenen Modus)';
   renderAll();
 }
 
-function deltaColor(delta) {
-  if(delta === null) return '';
-  if(weightMode === 'maintain') return delta === 0 ? 'var(--accent)' : 'var(--accent3)';
-  if(weightMode === 'cut') return delta < 0 ? 'var(--accent)' : 'var(--red)';
-  if(weightMode === 'bulk') return delta > 0 ? 'var(--accent)' : 'var(--red)';
-  return '';
+function modeLabel(mode) {
+  return { cut:'Cut 🔻', bulk:'Bulk 🔺', reverse:'Reverse Diät 🔄' }[mode] || mode;
 }
 
-function deltaClass(delta) {
+function modeForWeek(weekIdx) {
+  return weekModes[weekIdx] !== undefined ? weekModes[weekIdx] : weightMode;
+}
+
+function deltaColor(delta, mode) {
+  if(delta === null) return 'var(--text3)';
+  const m = mode || weightMode;
+  if(m === 'reverse') return delta >= 0 ? 'var(--accent)' : 'var(--red)';
+  if(m === 'cut') return delta < 0 ? 'var(--accent)' : 'var(--red)';
+  if(m === 'bulk') return delta > 0 ? 'var(--accent)' : 'var(--red)';
+  return 'var(--text2)';
+}
+
+function deltaClass(delta, mode) {
   if(delta === null) return '';
-  if(weightMode === 'maintain') return '';
-  if(weightMode === 'cut') return delta < 0 ? 'pos' : 'neg';
-  if(weightMode === 'bulk') return delta > 0 ? 'pos' : 'neg';
+  const m = mode || weightMode;
+  if(m === 'reverse') return delta >= 0 ? 'pos' : 'neg';
+  if(m === 'cut') return delta < 0 ? 'pos' : 'neg';
+  if(m === 'bulk') return delta > 0 ? 'pos' : 'neg';
   return '';
 }
 
