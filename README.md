@@ -1,2 +1,2 @@
 # pyhsique-log
-weight / Steps / calories tracker 
+daily weight / Steps / calories tracker 
