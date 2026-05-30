@@ -423,7 +423,11 @@ tbody td {
                 <label>Kalorienziel (kcal)</label>
                 <input type="number" id="kcal-goal-input" placeholder="z.B. 2400">
               </div>
-              <button class="btn btn-primary" style="width:100%;margin-top:8px" onclick="setKcalGoal()">Setzen</button>
+              <div style="display:flex;gap:6px;margin-top:8px">
+                <button id="kcal-type-max" class="btn btn-primary" style="flex:1;font-size:12px" onclick="selectKcalType('max')">Maximum</button>
+                <button id="kcal-type-min" class="btn" style="flex:1;font-size:12px" onclick="selectKcalType('min')">Minimum</button>
+              </div>
+              <button class="btn" style="width:100%;margin-top:6px" onclick="setKcalGoal()">Setzen</button>
               <p class="export-note" id="kcal-goal-info" style="margin-top:6px">Kein Ziel gesetzt</p>
             </div>
             <div>
@@ -491,6 +495,7 @@ const INITIAL = [
 let entries = [];
 let goal    = null;
 let kcalGoal = null;
+let kcalGoalType = 'max'; // 'max' or 'min'
 let stepsGoal = null;
 let mainChart = null;
 let activeTab = 'weight';
@@ -510,6 +515,7 @@ function load() {
     goal = g ? parseFloat(g) : null;
     const kg2 = localStorage.getItem(KCAL_GOAL_KEY);
     kcalGoal = kg2 ? parseInt(kg2) : null;
+    kcalGoalType = localStorage.getItem('pql_kcal_goal_type') || 'max';
     const sg = localStorage.getItem(STEPS_GOAL_KEY);
     stepsGoal = sg ? parseInt(sg) : null;
   } catch(e) {
@@ -560,7 +566,7 @@ function showView(name, el) {
   if(name === 'add') {
     document.getElementById('in-date').value = new Date().toISOString().split('T')[0];
     if(goal) { document.getElementById('goal-input').value = goal; updateGoalInfo(); }
-    if(kcalGoal) { document.getElementById('kcal-goal-input').value = kcalGoal; document.getElementById('kcal-goal-info').textContent = `Ziel: ${kcalGoal.toLocaleString()} kcal/Tag`; }
+    if(kcalGoal) { document.getElementById('kcal-goal-input').value = kcalGoal; const tl = kcalGoalType === 'max' ? 'Max' : 'Min'; document.getElementById('kcal-goal-info').textContent = `${tl}: ${kcalGoal.toLocaleString()} kcal/Tag`; selectKcalType(kcalGoalType); }
     if(stepsGoal) { document.getElementById('steps-goal-input').value = stepsGoal; document.getElementById('steps-goal-info').textContent = `Ziel: ${stepsGoal.toLocaleString()} Schritte/Tag`; }
   }
 }
@@ -727,7 +733,7 @@ function renderLog() {
     const minWeight = weekWeights.length ? Math.min(...weekWeights) : null;
     week.forEach(e => {
       const isMinWeight = minWeight != null && e.weight === minWeight;
-      const kcalColor = kcalGoal && e.kcal != null ? (e.kcal > kcalGoal ? 'var(--red)' : 'var(--accent)') : '';
+      const kcalColor = kcalGoal && e.kcal != null ? (kcalGoalType === 'max' ? (e.kcal > kcalGoal ? 'var(--red)' : 'var(--accent)') : (e.kcal < kcalGoal ? 'var(--red)' : 'var(--accent)')) : '';
       const stepsColor = stepsGoal && e.steps != null ? (e.steps >= stepsGoal ? 'var(--accent)' : 'var(--red)') : '';
       const weightStyle = isMinWeight ? 'color:var(--accent);font-weight:600' : '';
       rows += `<tr>
@@ -847,13 +853,24 @@ function setGoal() {
   renderMetrics(); toast('✓ Ziel gesetzt: ' + v + ' kg');
 }
 
+function selectKcalType(type) {
+  kcalGoalType = type;
+  document.getElementById('kcal-type-max').className = type === 'max' ? 'btn btn-primary' : 'btn';
+  document.getElementById('kcal-type-min').className = type === 'min' ? 'btn btn-primary' : 'btn';
+  document.getElementById('kcal-type-max').style.flex = '1';
+  document.getElementById('kcal-type-max').style.fontSize = '12px';
+  document.getElementById('kcal-type-min').style.flex = '1';
+  document.getElementById('kcal-type-min').style.fontSize = '12px';
+}
+
 function setKcalGoal() {
   const v = parseInt(document.getElementById('kcal-goal-input').value);
   if(isNaN(v)) { toast('⚠ Bitte gültigen Wert eingeben'); return; }
   kcalGoal = v;
-  try { localStorage.setItem(KCAL_GOAL_KEY, v); } catch(e) {}
-  document.getElementById('kcal-goal-info').textContent = `Ziel: ${v.toLocaleString()} kcal/Tag`;
-  renderLog(); toast('✓ Kalorienziel gesetzt: ' + v.toLocaleString() + ' kcal');
+  try { localStorage.setItem(KCAL_GOAL_KEY, v); localStorage.setItem('pql_kcal_goal_type', kcalGoalType); } catch(e) {}
+  const typeLabel = kcalGoalType === 'max' ? 'Max' : 'Min';
+  document.getElementById('kcal-goal-info').textContent = `${typeLabel}: ${v.toLocaleString()} kcal/Tag`;
+  renderLog(); toast('✓ Kalorienziel gesetzt: ' + v.toLocaleString() + ' kcal (' + typeLabel + ')');
 }
 
 function setStepsGoal() {
