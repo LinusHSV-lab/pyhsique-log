@@ -481,11 +481,12 @@ function saveGoal() {
 function load() {
   try {
     const s = localStorage.getItem(STORAGE_KEY);
-    entries = s ? JSON.parse(s) : [...INITIAL];
+    const wasReset = localStorage.getItem('pql_reset') === '1';
+    entries = s ? JSON.parse(s) : (wasReset ? [] : [...INITIAL]);
     const g = localStorage.getItem(GOAL_KEY);
     goal = g ? parseFloat(g) : null;
   } catch(e) {
-    entries = [...INITIAL];
+    entries = [];
   }
 }
 
@@ -771,7 +772,11 @@ function resetData() {
   if(!confirm("Alle Daten löschen und neu starten? Das kann nicht rückgängig gemacht werden.")) return;
   entries = [];
   goal = null;
-  try { localStorage.removeItem(STORAGE_KEY); localStorage.removeItem(GOAL_KEY); } catch(e) {}
+  try {
+    localStorage.removeItem(STORAGE_KEY);
+    localStorage.removeItem(GOAL_KEY);
+    localStorage.setItem('pql_reset', '1');
+  } catch(e) {}
   renderAll();
   toast("✓ Daten zurückgesetzt");
 }
