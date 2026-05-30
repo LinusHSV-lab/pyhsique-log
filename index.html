@@ -407,6 +407,25 @@ tbody td {
       </div>
 
       <div class="card" style="max-width:620px;margin-top:16px">
+        <div class="card-header"><div class="card-header-title">Profil / Account</div></div>
+        <div class="card-body">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:10px">
+            <div class="form-group">
+              <label>Name</label>
+              <input type="text" id="profile-name" placeholder="Dein Name">
+            </div>
+            <div class="form-group">
+              <label>Startdatum</label>
+              <input type="date" id="profile-start">
+            </div>
+          </div>
+          <button class="btn btn-primary" onclick="saveProfile()">Profil speichern</button>
+          <p class="export-note" id="profile-info" style="margin-top:6px">Kein Profil gespeichert</p>
+          <p class="export-note" style="margin-top:4px;color:var(--text3)">💡 Für mehrere Nutzer: Jeder öffnet den Link in seinem eigenen Browser und klickt „Zurücksetzen".</p>
+        </div>
+      </div>
+
+      <div class="card" style="max-width:620px;margin-top:16px">
         <div class="card-header"><div class="card-header-title">Ziele</div></div>
         <div class="card-body">
           <div style="margin-bottom:16px">
@@ -583,6 +602,7 @@ function showView(name, el) {
     if(goal) { document.getElementById('goal-input').value = goal; updateGoalInfo(); }
     if(kcalGoal) { document.getElementById('kcal-goal-input').value = kcalGoal; const tl = kcalGoalType === 'max' ? 'Max' : 'Min'; document.getElementById('kcal-goal-info').textContent = `${tl}: ${kcalGoal.toLocaleString()} kcal/Tag`; selectKcalType(kcalGoalType); }
     setWeightMode(weightMode); // restore global mode buttons
+    loadProfile();
     if(stepsGoal) { document.getElementById('steps-goal-input').value = stepsGoal; document.getElementById('steps-goal-info').textContent = `Ziel: ${stepsGoal.toLocaleString()} Schritte/Tag`; }
   }
 }
@@ -614,9 +634,25 @@ function renderMetrics() {
     document.getElementById('sidebar-progress-sub').textContent = 'Kein Ziel gesetzt';
   }
 
+  // 6. Wöchentlicher Gewichtsverlust berechnen (Δ letzte 7 Tage)
+  const lastWeekEntries = groupByWeek(withW);
+  const lastWk = lastWeekEntries[lastWeekEntries.length-1];
+  const lastWkFirst = lastWk?.find(e=>e.weight!=null)?.weight ?? null;
+  const lastWkLast = lastWk ? [...lastWk].reverse().find(e=>e.weight!=null)?.weight ?? null : null;
+  const weeklyDelta = (lastWkFirst!=null && lastWkLast!=null) ? lastWkLast - lastWkFirst : null;
+  const weeklyStr = weeklyDelta!=null ? ` · ${weeklyDelta>0?'+':''}${weeklyDelta.toFixed(2)} kg/Woche` : '';
+
+  // 7+8+10. Dynamische Bezeichnung je nach globalem Modus
+  const curMode = weightMode;
+  const lossLabel = curMode==='bulk' ? 'Gewichtszunahme' : curMode==='reverse' ? 'Gewichtsveränderung' : 'Gesamtverlust';
+  const lossValue = curMode==='bulk'
+    ? (loss<=0?'+':'–')+Math.abs(loss).toFixed(1)
+    : (loss>=0?'–':'+')+Math.abs(loss).toFixed(1);
+  const lossColor = curMode==='reverse' ? 'blue' : loss>0 ? (curMode==='bulk'?'red':'green') : (curMode==='bulk'?'green':'red');
+
   const rows = [
     {label:'Aktuelles Gewicht', value: current.toFixed(1), unit:'kg', sub: `Start: ${start.toFixed(1)} kg`, cls:'green'},
-    {label:'Gesamtverlust',     value: (loss>=0?'-':'+')+Math.abs(loss).toFixed(1), unit:'kg', sub:`über ${d.length} Tage`, cls: loss>0?'green':'red'},
+    {label: lossLabel, value: lossValue, unit:'kg', sub:`über ${d.length} Tage${weeklyStr}`, cls: lossColor},
     {label:'∅ Kalorien/Tag',   value: kcalAvg ? Math.round(kcalAvg).toLocaleString() : '–', unit:'kcal', sub:`∅ ${stepsAvg ? Math.round(stepsAvg).toLocaleString():'-'} Schritte/Tag`, cls:'blue'},
     {label:'Gym-Tage',         value: gymDays, unit:'', sub:`von ${d.length} Tagen (${Math.round(gymDays/d.length*100)}%)`, cls:'orange'},
   ];
@@ -750,7 +786,15 @@ function renderLog() {
     const minWeight = weekWeights.length ? Math.min(...weekWeights) : null;
     week.forEach(e => {
       const isMinWeight = minWeight != null && e.weight === minWeight;
-      const kcalColor = kcalGoal && e.kcal != null ? (kcalGoalType === 'max' ? (e.kcal > kcalGoal ? 'var(--red)' : 'var(--accent)') : (e.kcal < kcalGoal ? 'var(--red)' : 'var(--accent)')) : '';
+      // 4. Kalorienziel ±30 kcal Toleranz: innerhalb = grün, außerhalb = rot
+      const kcalTolerance = 30;
+      let kcalColor = '';
+      if(kcalGoal && e.kcal != null) {
+        const diff = e.kcal - kcalGoal;
+        if(Math.abs(diff) <= kcalTolerance) { kcalColor = 'var(--accent)'; } // im Zielbereich
+        else if(kcalGoalType === 'max') { kcalColor = diff > 0 ? 'var(--red)' : 'var(--accent)'; }
+        else { kcalColor = diff < 0 ? 'var(--red)' : 'var(--accent)'; }
+      }
       const stepsColor = stepsGoal && e.steps != null ? (e.steps >= stepsGoal ? 'var(--accent)' : 'var(--red)') : '';
       const weightStyle = isMinWeight ? 'color:var(--accent);font-weight:600' : '';
       rows += `<tr>
@@ -782,10 +826,18 @@ function renderWeeks() {
   const cards = document.getElementById('week-cards');
   cards.innerHTML = weeks.map((w, i) => {
     const aw = avgVal(w,'weight'), ak = avgVal(w,'kcal'), as2 = avgVal(w,'steps');
-    const prevAw = i>0 ? avgVal(weeks[i-1],'weight') : null;
-    const delta = (aw!=null && prevAw!=null) ? aw - prevAw : null;
+    // 2. Bugfix: Woche 1 nutzt Montag→Sonntag, alle anderen Woche-zu-Woche
+    let delta;
+    if(i === 0) {
+      const fw = w.find(e=>e.weight!=null)?.weight ?? null;
+      const lw = [...w].reverse().find(e=>e.weight!=null)?.weight ?? null;
+      delta = (fw!=null && lw!=null) ? lw - fw : null;
+    } else {
+      const prevAw = avgVal(weeks[i-1],'weight');
+      delta = (aw!=null && prevAw!=null) ? aw - prevAw : null;
+    }
     return `<div class="week-card">
-      <div class="week-card-title">Woche ${i+1}</div>
+      <div class="week-card-title">Woche ${i+1} ${{ cut:'Diät', bulk:'Bulk', reverse:'Reverse Diät' }[modeForWeek(i)]}</div>
       <div class="week-stat">
         <div class="week-stat-label">∅ Gewicht</div>
         <div class="week-stat-value">${aw!=null?aw.toFixed(2):'–'} <span style="font-size:10px;color:var(--text3)">kg</span></div>
@@ -811,13 +863,21 @@ function renderWeeks() {
   const tbody = document.getElementById('week-tbody');
   tbody.innerHTML = weeks.map((w, i) => {
     const aw = avgVal(w,'weight'), ak = avgVal(w,'kcal'), as2 = avgVal(w,'steps');
-    const prevAw = i>0 ? avgVal(weeks[i-1],'weight') : null;
-    const delta = (aw!=null && prevAw!=null) ? aw - prevAw : null;
+    // 2. Bugfix: Woche 1 nutzt Montag→Sonntag konsistent mit Dashboard
+    let delta;
+    if(i === 0) {
+      const fw = w.find(e=>e.weight!=null)?.weight ?? null;
+      const lw = [...w].reverse().find(e=>e.weight!=null)?.weight ?? null;
+      delta = (fw!=null && lw!=null) ? lw - fw : null;
+    } else {
+      const prevAw = avgVal(weeks[i-1],'weight');
+      delta = (aw!=null && prevAw!=null) ? aw - prevAw : null;
+    }
     const deltaHtml = delta!=null
       ? `<span style="font-family:'DM Mono',monospace;font-size:12px;color:${deltaColor(delta, modeForWeek(i))}">` + (delta>0?'+':'') + delta.toFixed(2) + `</span>`
       : '–';
     return `<tr>
-      <td class="mono" style="color:var(--text2)">Woche ${i+1}</td>
+      <td class="mono" style="color:var(--text2)">Woche ${i+1} ${{ cut:'Diät', bulk:'Bulk', reverse:'Reverse Diät' }[modeForWeek(i)]}</td>
       <td class="mono">${aw!=null?aw.toFixed(2):'–'}</td>
       <td>${deltaHtml}</td>
       <td class="mono">${ak!=null?Math.round(ak).toLocaleString():'–'}</td>
@@ -868,6 +928,27 @@ function deleteEntry(date) {
   save(); renderAll(); toast('✓ Eintrag gelöscht');
 }
 
+// ── 3. Profil speichern ─────────────────────────────────────────────────────
+function saveProfile() {
+  const name = document.getElementById('profile-name').value.trim();
+  const start = document.getElementById('profile-start').value;
+  if(!name) { toast('⚠ Bitte einen Namen eingeben'); return; }
+  try { localStorage.setItem('pql_profile', JSON.stringify({name, start})); } catch(e) {}
+  document.getElementById('profile-info').textContent = `Profil: ${name}${start ? ' · Start: '+fmtDate(start) : ''}`;
+  toast('✓ Profil gespeichert');
+}
+
+function loadProfile() {
+  try {
+    const p = JSON.parse(localStorage.getItem('pql_profile') || 'null');
+    if(p) {
+      if(document.getElementById('profile-name')) document.getElementById('profile-name').value = p.name || '';
+      if(document.getElementById('profile-start')) document.getElementById('profile-start').value = p.start || '';
+      if(document.getElementById('profile-info')) document.getElementById('profile-info').textContent = `Profil: ${p.name}${p.start ? ' · Start: '+fmtDate(p.start) : ''}`;
+    }
+  } catch(e) {}
+}
+
 function setGoal() {
   const v = parseFloat(document.getElementById('goal-input').value);
   if(isNaN(v)) { toast('⚠ Bitte gültiges Gewicht eingeben'); return; }
@@ -905,9 +986,10 @@ function modeForWeek(weekIdx) {
 }
 
 function deltaColor(delta, mode) {
+  // 1. Reverse Diät = immer blau; Cut = grün/rot; Bulk = grün/rot
   if(delta === null) return 'var(--text3)';
   const m = mode || weightMode;
-  if(m === 'reverse') return delta >= 0 ? 'var(--accent)' : 'var(--red)';
+  if(m === 'reverse') return 'var(--accent3)'; // blau für Reverse Diät
   if(m === 'cut') return delta < 0 ? 'var(--accent)' : 'var(--red)';
   if(m === 'bulk') return delta > 0 ? 'var(--accent)' : 'var(--red)';
   return 'var(--text2)';
@@ -916,7 +998,7 @@ function deltaColor(delta, mode) {
 function deltaClass(delta, mode) {
   if(delta === null) return '';
   const m = mode || weightMode;
-  if(m === 'reverse') return delta >= 0 ? 'pos' : 'neg';
+  if(m === 'reverse') return ''; // kein pos/neg bei Reverse
   if(m === 'cut') return delta < 0 ? 'pos' : 'neg';
   if(m === 'bulk') return delta > 0 ? 'pos' : 'neg';
   return '';
