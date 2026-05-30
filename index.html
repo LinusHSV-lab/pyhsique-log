@@ -407,16 +407,34 @@ tbody td {
       </div>
 
       <div class="card" style="max-width:620px;margin-top:16px">
-        <div class="card-header"><div class="card-header-title">Zielgewicht</div></div>
+        <div class="card-header"><div class="card-header-title">Ziele</div></div>
         <div class="card-body">
-          <div style="display:flex;gap:12px;align-items:flex-end">
-            <div class="form-group" style="flex:1">
-              <label>Zielgewicht (kg)</label>
-              <input type="number" id="goal-input" step="0.1" placeholder="z.B. 69.0">
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px">
+            <div>
+              <div class="form-group">
+                <label>Zielgewicht (kg)</label>
+                <input type="number" id="goal-input" step="0.1" placeholder="z.B. 69.0">
+              </div>
+              <button class="btn btn-primary" style="width:100%;margin-top:8px" onclick="setGoal()">Setzen</button>
+              <p class="export-note" id="goal-info" style="margin-top:6px">Kein Ziel gesetzt</p>
             </div>
-            <button class="btn btn-primary" onclick="setGoal()">Setzen</button>
+            <div>
+              <div class="form-group">
+                <label>Kalorienziel (kcal)</label>
+                <input type="number" id="kcal-goal-input" placeholder="z.B. 2400">
+              </div>
+              <button class="btn btn-primary" style="width:100%;margin-top:8px" onclick="setKcalGoal()">Setzen</button>
+              <p class="export-note" id="kcal-goal-info" style="margin-top:6px">Kein Ziel gesetzt</p>
+            </div>
+            <div>
+              <div class="form-group">
+                <label>Schrittziel</label>
+                <input type="number" id="steps-goal-input" placeholder="z.B. 10000">
+              </div>
+              <button class="btn btn-primary" style="width:100%;margin-top:8px" onclick="setStepsGoal()">Setzen</button>
+              <p class="export-note" id="steps-goal-info" style="margin-top:6px">Kein Ziel gesetzt</p>
+            </div>
           </div>
-          <p class="export-note" id="goal-info">Kein Ziel gesetzt</p>
         </div>
       </div>
     </div>
@@ -431,6 +449,8 @@ tbody td {
 // ─── DATA ───────────────────────────────────────────────────────────────────
 const STORAGE_KEY = 'pql_entries_v3';
 const GOAL_KEY    = 'pql_goal';
+const KCAL_GOAL_KEY = 'pql_kcal_goal';
+const STEPS_GOAL_KEY = 'pql_steps_goal';
 
 const INITIAL = [
   {date:'2026-04-27',weight:73.3,kcal:2964,steps:7455,gym:false},
@@ -470,6 +490,8 @@ const INITIAL = [
 
 let entries = [];
 let goal    = null;
+let kcalGoal = null;
+let stepsGoal = null;
 let mainChart = null;
 let activeTab = 'weight';
 
@@ -486,6 +508,10 @@ function load() {
     entries = s ? JSON.parse(s) : (wasReset ? [] : [...INITIAL]);
     const g = localStorage.getItem(GOAL_KEY);
     goal = g ? parseFloat(g) : null;
+    const kg2 = localStorage.getItem(KCAL_GOAL_KEY);
+    kcalGoal = kg2 ? parseInt(kg2) : null;
+    const sg = localStorage.getItem(STEPS_GOAL_KEY);
+    stepsGoal = sg ? parseInt(sg) : null;
   } catch(e) {
     entries = [];
   }
@@ -533,10 +559,9 @@ function showView(name, el) {
   document.getElementById('topbar-title').textContent = viewTitles[name];
   if(name === 'add') {
     document.getElementById('in-date').value = new Date().toISOString().split('T')[0];
-    if(goal) {
-      document.getElementById('goal-input').value = goal;
-      updateGoalInfo();
-    }
+    if(goal) { document.getElementById('goal-input').value = goal; updateGoalInfo(); }
+    if(kcalGoal) { document.getElementById('kcal-goal-input').value = kcalGoal; document.getElementById('kcal-goal-info').textContent = `Ziel: ${kcalGoal.toLocaleString()} kcal/Tag`; }
+    if(stepsGoal) { document.getElementById('steps-goal-input').value = stepsGoal; document.getElementById('steps-goal-info').textContent = `Ziel: ${stepsGoal.toLocaleString()} Schritte/Tag`; }
   }
 }
 
@@ -698,12 +723,18 @@ function renderLog() {
   const weeks = groupByWeek(entries);
   let rows = '';
   weeks.forEach((week, wi) => {
+    const weekWeights = week.filter(e => e.weight != null).map(e => e.weight);
+    const minWeight = weekWeights.length ? Math.min(...weekWeights) : null;
     week.forEach(e => {
+      const isMinWeight = minWeight != null && e.weight === minWeight;
+      const kcalColor = kcalGoal && e.kcal != null ? (e.kcal > kcalGoal ? 'var(--red)' : 'var(--accent)') : '';
+      const stepsColor = stepsGoal && e.steps != null ? (e.steps >= stepsGoal ? 'var(--accent)' : 'var(--red)') : '';
+      const weightStyle = isMinWeight ? 'color:var(--accent);font-weight:600' : '';
       rows += `<tr>
         <td class="mono" style="color:var(--text2);font-size:12px">${fmtDate(e.date)}</td>
-        <td class="mono">${e.weight != null ? e.weight.toFixed(1) : '–'}</td>
-        <td class="mono">${e.kcal != null ? e.kcal.toLocaleString() : '–'}</td>
-        <td class="mono">${e.steps != null ? e.steps.toLocaleString() : '–'}</td>
+        <td class="mono" style="${weightStyle}">${e.weight != null ? e.weight.toFixed(1) : '–'}</td>
+        <td class="mono" style="color:${kcalColor}">${e.kcal != null ? e.kcal.toLocaleString() : '–'}</td>
+        <td class="mono" style="color:${stepsColor}">${e.steps != null ? e.steps.toLocaleString() : '–'}</td>
         <td>${e.gym ? '<span class="gym-badge">Gym</span>' : ''}</td>
         <td><button class="del-btn" onclick="deleteEntry('${e.date}')" title="Löschen">×</button></td>
       </tr>`;
@@ -814,6 +845,24 @@ function setGoal() {
   if(isNaN(v)) { toast('⚠ Bitte gültiges Gewicht eingeben'); return; }
   goal = v; saveGoal(); updateGoalInfo();
   renderMetrics(); toast('✓ Ziel gesetzt: ' + v + ' kg');
+}
+
+function setKcalGoal() {
+  const v = parseInt(document.getElementById('kcal-goal-input').value);
+  if(isNaN(v)) { toast('⚠ Bitte gültigen Wert eingeben'); return; }
+  kcalGoal = v;
+  try { localStorage.setItem(KCAL_GOAL_KEY, v); } catch(e) {}
+  document.getElementById('kcal-goal-info').textContent = `Ziel: ${v.toLocaleString()} kcal/Tag`;
+  renderLog(); toast('✓ Kalorienziel gesetzt: ' + v.toLocaleString() + ' kcal');
+}
+
+function setStepsGoal() {
+  const v = parseInt(document.getElementById('steps-goal-input').value);
+  if(isNaN(v)) { toast('⚠ Bitte gültigen Wert eingeben'); return; }
+  stepsGoal = v;
+  try { localStorage.setItem(STEPS_GOAL_KEY, v); } catch(e) {}
+  document.getElementById('steps-goal-info').textContent = `Ziel: ${v.toLocaleString()} Schritte/Tag`;
+  renderLog(); toast('✓ Schrittziel gesetzt: ' + v.toLocaleString());
 }
 
 function updateGoalInfo() {
