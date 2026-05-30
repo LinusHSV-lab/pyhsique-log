@@ -286,7 +286,8 @@ tbody td {
     <div class="topbar-title" id="topbar-title">Dashboard</div>
     <div class="topbar-right">
       <button class="btn" onclick="exportCSV()">⬇ CSV Export</button>
-      <button class="btn" onclick="importFile()">⬆ Excel Import</button>
+      <button class="btn" onclick="importFile()">⬆ Import</button>
+      <button class="btn btn-danger" onclick="resetData()">✕ Zurücksetzen</button>
       <input type="file" id="import-input" accept=".json,.csv" style="display:none" onchange="handleImport(event)">
     </div>
   </div>
@@ -766,6 +767,14 @@ function renderWeeks() {
 }
 
 // ─── ACTIONS ────────────────────────────────────────────────────────────────
+function resetData() {
+  if(!confirm("Alle Daten löschen und neu starten? Das kann nicht rückgängig gemacht werden.")) return;
+  entries = [];
+  goal = null;
+  try { localStorage.removeItem(STORAGE_KEY); localStorage.removeItem(GOAL_KEY); } catch(e) {}
+  renderAll();
+  toast("✓ Daten zurückgesetzt");
+}
 function addEntry() {
   const date   = document.getElementById('in-date').value;
   const weight = parseFloat(document.getElementById('in-weight').value);
