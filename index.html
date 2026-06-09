@@ -359,12 +359,19 @@ tbody td{padding:9px 12px;border-bottom:1px solid var(--border);font-size:13px;c
     <div class="view" id="view-add">
       <div class="section-card">
         <div class="section-title">Neuer Eintrag</div>
-        <div style="display:grid;grid-template-columns:1.5fr 1fr 1fr 1fr;gap:10px;margin-bottom:12px">
+        <div style="display:grid;grid-template-columns:1.5fr 1fr 1fr 1fr;gap:10px;margin-bottom:10px">
           <div class="form-group"><label>Datum</label><input type="date" id="in-date"></div>
           <div class="form-group"><label id="weight-label">Gewicht</label><input type="number" id="in-weight" placeholder="72.5" step="0.1"></div>
-          <div class="form-group"><label>Kalorien</label><input type="number" id="in-kcal" placeholder="2400"></div>
+          <div class="form-group"><label>Kalorien</label><input type="number" id="in-kcal" placeholder="2400" oninput="checkMacroKcal()"></div>
           <div class="form-group"><label>Schritte</label><input type="number" id="in-steps" placeholder="10000"></div>
         </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:10px">
+          <div class="form-group"><label style="color:#4fa8ff">Protein (g)</label><input type="number" id="in-protein" placeholder="150" step="1" oninput="checkMacroKcal()"></div>
+          <div class="form-group"><label style="color:#A855F7">Kohlenhydrate (g)</label><input type="number" id="in-carbs" placeholder="250" step="1" oninput="checkMacroKcal()"></div>
+          <div class="form-group"><label style="color:#ff6b35">Fett (g)</label><input type="number" id="in-fat" placeholder="70" step="1" oninput="checkMacroKcal()"></div>
+        </div>
+        <div id="macro-kcal-warning" style="display:none;background:rgba(255,77,77,.08);border:1px solid rgba(255,77,77,.25);border-radius:7px;padding:8px 12px;font-size:12px;font-family:'DM Mono',monospace;color:var(--red);margin-bottom:10px"></div>
+        <div id="macro-kcal-ok" style="display:none;background:rgba(79,255,176,.08);border:1px solid rgba(79,255,176,.2);border-radius:7px;padding:8px 12px;font-size:12px;font-family:'DM Mono',monospace;color:var(--accent);margin-bottom:10px"></div>
         <div class="form-actions">
           <div class="form-gym"><input type="checkbox" id="in-gym"><label for="in-gym">Gym-Tag</label></div>
           <button class="btn btn-primary" style="margin-left:auto" onclick="addEntry()">Eintrag speichern</button>
@@ -458,6 +465,25 @@ tbody td{padding:9px 12px;border-bottom:1px solid var(--border);font-size:13px;c
             <p class="export-note" id="steps-goal-info" style="margin-top:6px">Kein Ziel gesetzt</p>
           </div>
         </div>
+      </div>
+
+      <div class="section-card">
+        <div class="section-title">Makro-Ziele (g/Tag)</div>
+        <p class="export-note" style="margin-bottom:12px">Die Summe der Makros wird automatisch in Kalorien umgerechnet (Protein &amp; Carbs = 4 kcal/g, Fett = 9 kcal/g) und mit dem Kalorienziel verglichen.</p>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;margin-bottom:12px">
+          <div>
+            <div class="form-group" style="margin-bottom:8px"><label style="color:#4fa8ff">Protein-Ziel (g)</label><input type="number" id="protein-goal-input" placeholder="z.B. 150" oninput="checkMacroGoalKcal()"></div>
+          </div>
+          <div>
+            <div class="form-group" style="margin-bottom:8px"><label style="color:#A855F7">Carbs-Ziel (g)</label><input type="number" id="carbs-goal-input" placeholder="z.B. 250" oninput="checkMacroGoalKcal()"></div>
+          </div>
+          <div>
+            <div class="form-group" style="margin-bottom:8px"><label style="color:#ff6b35">Fett-Ziel (g)</label><input type="number" id="fat-goal-input" placeholder="z.B. 70" oninput="checkMacroGoalKcal()"></div>
+          </div>
+        </div>
+        <div id="macro-goal-check" style="font-size:12px;font-family:'DM Mono',monospace;color:var(--text3);margin-bottom:10px;min-height:18px"></div>
+        <button class="btn btn-primary" onclick="setMacroGoals()">Makro-Ziele setzen</button>
+        <p class="export-note" id="macro-goal-info" style="margin-top:6px">Keine Makro-Ziele gesetzt</p>
       </div>
     </div>
 
@@ -664,6 +690,7 @@ async function onLogin() {
 let entries=[], goal=null, kcalGoal=null, kcalGoalType='max', stepsGoal=null;
 let weightMode='cut', weekModes={};
 let gymGoalGlobal=null; // 1. global gym goal
+let proteinGoal=null, carbsGoal=null, fatGoal=null; // macro goals
 let weeklyRate=null;    // 7. planned weekly rate
 let userHeight=null;    // 8. height
 let weightUnit='kg';    // 8. kg/lbs
@@ -707,6 +734,9 @@ async function loadProfileFromSupabase() {
   if(data.weight_unit) weightUnit=data.weight_unit;
   if(data.length_unit) lengthUnit=data.length_unit;
   try{ if(data.week_modes) weekModes=JSON.parse(data.week_modes); }catch(e){weekModes={};}
+  if(data.protein_goal!=null) proteinGoal=data.protein_goal;
+  if(data.carbs_goal!=null) carbsGoal=data.carbs_goal;
+  if(data.fat_goal!=null) fatGoal=data.fat_goal;
   if(data.display_name) {
     try{localStorage.setItem('pql_profile_'+currentUser.id, JSON.stringify({name:data.display_name,start:data.start_date||''}));}catch(e){}
   }
@@ -721,6 +751,7 @@ async function saveProfileToSupabase(extra={}) {
     gym_goal_global: gymGoalGlobal, weekly_rate: weeklyRate,
     user_height: userHeight, weight_unit: weightUnit, length_unit: lengthUnit,
     week_modes: JSON.stringify(weekModes),
+    protein_goal: proteinGoal, carbs_goal: carbsGoal, fat_goal: fatGoal,
     updated_at: new Date().toISOString(),
     ...extra
   };
@@ -1172,6 +1203,11 @@ function updateZieleUI(){
   const ggi2=document.getElementById('gym-goal-info');if(ggi2) ggi2.textContent=gymGoalGlobal?`Gym-Ziel: ${gymGoalGlobal} Tage/Woche`:'Kein Gym-Ziel gesetzt';
   if(kcalGoal){const ki=document.getElementById('kcal-goal-input');if(ki) ki.value=kcalGoal;const tl=kcalGoalType==='max'?'Max':'Min';const kgi=document.getElementById('kcal-goal-info');if(kgi) kgi.textContent=`${tl}: ${kcalGoal.toLocaleString()} kcal/Tag`;selectKcalType(kcalGoalType);}
   if(stepsGoal){const si=document.getElementById('steps-goal-input');if(si) si.value=stepsGoal;const sgi=document.getElementById('steps-goal-info');if(sgi) sgi.textContent=`Ziel: ${stepsGoal.toLocaleString()} Schritte/Tag`;}
+  if(proteinGoal!=null){const pi=document.getElementById('protein-goal-input');if(pi) pi.value=proteinGoal;}
+  if(carbsGoal!=null){const ci=document.getElementById('carbs-goal-input');if(ci) ci.value=carbsGoal;}
+  if(fatGoal!=null){const fi=document.getElementById('fat-goal-input');if(fi) fi.value=fatGoal;}
+  if(proteinGoal||carbsGoal||fatGoal){const mgi=document.getElementById('macro-goal-info');if(mgi){const mk=macrosToKcal(proteinGoal,carbsGoal,fatGoal);mgi.textContent=`Protein: ${proteinGoal||'–'}g · Carbs: ${carbsGoal||'–'}g · Fett: ${fatGoal||'–'}g = ${mk} kcal`;}}
+  checkMacroGoalKcal();
 }
 
 // ── ACTIONS ───────────────────────────────────────────────────────────────
@@ -1290,6 +1326,78 @@ async function handleImport(event){
     }catch(err){toast('⚠ Import fehlgeschlagen: '+err.message);}
   };
   reader.readAsText(file); event.target.value='';
+}
+
+
+// ── MAKROS ────────────────────────────────────────────────────────────────
+// Calories from macros: protein=4, carbs=4, fat=9 kcal/g
+function macrosToKcal(p, c, f) {
+  return (p||0)*4 + (c||0)*4 + (f||0)*9;
+}
+
+function checkMacroKcal() {
+  const kcal = parseInt(document.getElementById('in-kcal')?.value) || null;
+  const p = parseInt(document.getElementById('in-protein')?.value) || null;
+  const c2 = parseInt(document.getElementById('in-carbs')?.value) || null;
+  const f = parseInt(document.getElementById('in-fat')?.value) || null;
+  const warn = document.getElementById('macro-kcal-warning');
+  const ok = document.getElementById('macro-kcal-ok');
+  if(!warn || !ok) return;
+  if(!kcal || (!p && !c2 && !f)) { warn.style.display='none'; ok.style.display='none'; return; }
+  const macroKcal = macrosToKcal(p, c2, f);
+  const diff = macroKcal - kcal;
+  if(Math.abs(diff) <= 30) {
+    warn.style.display='none';
+    ok.style.display='block';
+    ok.textContent = `✓ Makros passen: ${macroKcal} kcal aus Makros ≈ ${kcal} kcal Ziel (Δ${diff>0?'+':''}${diff} kcal)`;
+  } else if(diff > 0) {
+    ok.style.display='none';
+    warn.style.display='block';
+    warn.textContent = `⚠ Makros zu viel: ${macroKcal} kcal aus Makros > ${kcal} kcal eingetragen (+${diff} kcal)`;
+  } else {
+    ok.style.display='none';
+    warn.style.display='block';
+    warn.textContent = `⚠ Makros zu wenig: ${macroKcal} kcal aus Makros < ${kcal} kcal eingetragen (${diff} kcal)`;
+  }
+}
+
+function checkMacroGoalKcal() {
+  const p = parseInt(document.getElementById('protein-goal-input')?.value) || null;
+  const c2 = parseInt(document.getElementById('carbs-goal-input')?.value) || null;
+  const f = parseInt(document.getElementById('fat-goal-input')?.value) || null;
+  const el = document.getElementById('macro-goal-check');
+  if(!el) return;
+  if(!p && !c2 && !f) { el.textContent=''; el.style.color='var(--text3)'; return; }
+  const macroKcal = macrosToKcal(p, c2, f);
+  if(kcalGoal) {
+    const diff = macroKcal - kcalGoal;
+    if(Math.abs(diff) <= 30) {
+      el.style.color='var(--accent)';
+      el.textContent = `✓ ${macroKcal} kcal aus Makros passt zum Kalorienziel von ${kcalGoal} kcal (Δ${diff>0?'+':''}${diff})`;
+    } else if(diff > 0) {
+      el.style.color='var(--red)';
+      el.textContent = `⚠ ${macroKcal} kcal aus Makros übersteigt Kalorienziel von ${kcalGoal} kcal um +${diff} kcal`;
+    } else {
+      el.style.color='var(--accent3)';
+      el.textContent = `ℹ ${macroKcal} kcal aus Makros liegt ${Math.abs(diff)} kcal unter dem Kalorienziel von ${kcalGoal} kcal`;
+    }
+  } else {
+    el.style.color='var(--text3)';
+    el.textContent = `Makros entsprechen ${macroKcal} kcal (kein Kalorienziel gesetzt)`;
+  }
+}
+
+function setMacroGoals() {
+  const p = parseInt(document.getElementById('protein-goal-input')?.value) || null;
+  const c2 = parseInt(document.getElementById('carbs-goal-input')?.value) || null;
+  const f = parseInt(document.getElementById('fat-goal-input')?.value) || null;
+  if(!p && !c2 && !f) { toast('⚠ Bitte mindestens ein Makro-Ziel eingeben'); return; }
+  proteinGoal=p; carbsGoal=c2; fatGoal=f;
+  saveProfileToSupabase();
+  const macroKcal = macrosToKcal(p, c2, f);
+  const el = document.getElementById('macro-goal-info');
+  if(el) el.textContent = `Protein: ${p||'–'}g · Carbs: ${c2||'–'}g · Fett: ${f||'–'}g = ${macroKcal} kcal`;
+  toast('✓ Makro-Ziele gesetzt');
 }
 
 function renderAll(){renderMetrics();renderChart();renderWeeklyMini();renderLog();}
