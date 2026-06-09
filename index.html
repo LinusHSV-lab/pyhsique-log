@@ -322,6 +322,7 @@ tbody td{padding:9px 12px;border-bottom:1px solid var(--border);font-size:13px;c
               <button class="tab-btn active" onclick="switchChart('weight',this)">Gewicht</button>
               <button class="tab-btn" onclick="switchChart('kcal',this)">Kalorien</button>
               <button class="tab-btn" onclick="switchChart('steps',this)">Schritte</button>
+              <button class="tab-btn" onclick="switchChart('macros',this)">Makros</button>
             </div>
           </div>
           <div class="card-body">
@@ -346,7 +347,7 @@ tbody td{padding:9px 12px;border-bottom:1px solid var(--border);font-size:13px;c
         <div class="card-body" style="padding:0">
           <div class="table-wrap">
             <table>
-              <thead><tr><th>Datum</th><th>Gewicht</th><th>Kalorien</th><th>Schritte</th><th>Gym</th><th></th></tr></thead>
+              <thead><tr><th>Datum</th><th>Gewicht</th><th>Kalorien</th><th>Protein</th><th>Carbs</th><th>Fett</th><th>Schritte</th><th>Gym</th><th></th></tr></thead>
               <tbody id="log-tbody"></tbody>
             </table>
           </div>
@@ -688,7 +689,7 @@ async function loadFromSupabase() {
   if(!currentUser) return;
   const {data,error}=await sb.from('entries').select('*').eq('user_id',currentUser.id).order('date');
   if(error){toast('⚠ Ladefehler: '+error.message);return;}
-  entries=(data||[]).map(r=>({date:r.date,weight:r.weight,kcal:r.kcal,steps:r.steps,gym:r.gym,_id:r.id}));
+  entries=(data||[]).map(r=>({date:r.date,weight:r.weight,kcal:r.kcal,steps:r.steps,gym:r.gym,protein:r.protein,carbs:r.carbs,fat:r.fat,_id:r.id}));
 }
 
 async function loadProfileFromSupabase() {
@@ -823,7 +824,7 @@ function switchChart(tab,el){
   activeTab=tab;
   document.querySelectorAll('#chart-tabs .tab-btn').forEach(b=>b.classList.remove('active'));
   el.classList.add('active');
-  const titles={weight:'Gewichtsverlauf',kcal:'Kalorienverlauf',steps:'Schrittverlauf'};
+  const titles={weight:'Gewichtsverlauf',kcal:'Kalorienverlauf',steps:'Schrittverlauf',macros:'Makroverlauf'};
   document.getElementById('chart-title').textContent=titles[tab];
   renderChart();
 }
@@ -871,12 +872,13 @@ function renderLog(){
       const isMin=minW!=null&&e.weight===minW;
       let kcalColor='';
       if(kcalGoal&&e.kcal!=null){const diff=e.kcal-kcalGoal;if(Math.abs(diff)<=30){kcalColor='var(--accent)';}else if(kcalGoalType==='max'){kcalColor=diff>0?'var(--red)':'var(--accent)';}else{kcalColor=diff<0?'var(--red)':'var(--accent)';}}
-      const sc=stepsGoal&&e.steps!=null?(e.steps>=stepsGoal?'var(--accent)':'var(--red)'):'';
+      const sc=stepsGoal&&e.steps!=null?(Math.abs(e.steps-stepsGoal)<=200?'var(--accent)':(e.steps>=stepsGoal?'var(--accent)':'var(--red)')):'';
       const ws=isMin?'color:var(--accent);font-weight:600':'';
-      rows+=`<tr><td class="mono" style="color:var(--text2);font-size:12px">${fmtDate(e.date)}</td><td class="mono" style="${ws}">${e.weight!=null?toDisplay(e.weight)?.toFixed(1):'–'}</td><td class="mono" style="color:${kcalColor}">${e.kcal!=null?e.kcal.toLocaleString():'–'}</td><td class="mono" style="color:${sc}">${e.steps!=null?e.steps.toLocaleString():'–'}</td><td>${e.gym?'<span class="gym-badge">Gym</span>':''}</td><td><button class="del-btn" onclick="deleteEntry('${e.date}')" title="Löschen">×</button></td></tr>`;
+      rows+=`<tr><td class="mono" style="color:var(--text2);font-size:12px">${fmtDate(e.date)}</td><td class="mono" style="${ws}">${e.weight!=null?toDisplay(e.weight)?.toFixed(1):'–'}</td><td class="mono" style="color:${kcalColor}">${e.kcal!=null?e.kcal.toLocaleString():'–'}</td><td class="mono" style="color:#4fa8ff">${e.protein!=null?e.protein+'g':'–'}</td><td class="mono" style="color:#A855F7">${e.carbs!=null?e.carbs+'g':'–'}</td><td class="mono" style="color:#ff6b35">${e.fat!=null?e.fat+'g':'–'}</td><td class="mono" style="color:${sc}">${e.steps!=null?e.steps.toLocaleString():'–'}</td><td>${e.gym?'<span class="gym-badge">Gym</span>':''}</td><td><button class="del-btn" onclick="deleteEntry('${e.date}')" title="Löschen">×</button></td></tr>`;
     });
     const aw=avgVal(week,'weight'),ak=avgVal(week,'kcal'),as2=avgVal(week,'steps');
-    rows+=`<tr class="avg-row"><td>∅ ${weekLabel(weeks,wi)}</td><td>${aw!=null?toDisplay(aw)?.toFixed(2):'–'}</td><td>${ak!=null?Math.round(ak).toLocaleString():'–'}</td><td>${as2!=null?Math.round(as2).toLocaleString():'–'}</td><td colspan="2"></td></tr>`;
+    const aprot=avgVal(week,'protein'),acarbs=avgVal(week,'carbs'),afat=avgVal(week,'fat');
+    rows+=`<tr class="avg-row"><td>∅ ${weekLabel(weeks,wi)}</td><td>${aw!=null?toDisplay(aw)?.toFixed(2):'–'}</td><td>${ak!=null?Math.round(ak).toLocaleString():'–'}</td><td>${aprot!=null?Math.round(aprot)+'g':'–'}</td><td>${acarbs!=null?Math.round(acarbs)+'g':'–'}</td><td>${afat!=null?Math.round(afat)+'g':'–'}</td><td>${as2!=null?Math.round(as2).toLocaleString():'–'}</td><td colspan="2"></td></tr>`;
   });
   document.getElementById('log-tbody').innerHTML=rows;
 }
@@ -1024,15 +1026,16 @@ function renderBewertungWochen(){
         const rateKg=weightUnit==='lbs'?fromDisplay(weeklyRate):weeklyRate;
         const expected=wm==='bulk'?rateKg:-rateKg;
         const tol=0.1;
-        if(wm==='cut'){weightOk=delta<0&&Math.abs(delta-(-Math.abs(rateKg)))<=tol+(Math.abs(rateKg)*0.3);}
-        else if(wm==='bulk'){weightOk=delta>0&&Math.abs(delta-Math.abs(rateKg))<=tol+(Math.abs(rateKg)*0.3);}
+        if(wm==='cut'){weightOk=(delta<0||Math.abs(delta)<=0.1)&&Math.abs(delta-(-Math.abs(rateKg)))<=tol+(Math.abs(rateKg)*0.3);}
+        else if(wm==='bulk'){weightOk=(delta>0||Math.abs(delta)<=0.1)&&Math.abs(delta-Math.abs(rateKg))<=tol+(Math.abs(rateKg)*0.3);}
         else{weightOk=Math.abs(delta)<=Math.abs(rateKg)+0.2;}
         const rDisp=toDisplay(Math.abs(rateKg))?.toFixed(2);
         lbl=`Ziel: ${wm==='cut'?'-':wm==='bulk'?'+':'±'}${rDisp} ${wUnit()} | Tatsächlich: ${delta>0?'+':''}${dDisp} ${wUnit()}`;
       } else {
-        if(wm==='cut'){weightOk=delta<0;lbl=`Gewichtsverlust: ${delta>0?'+':''}${dDisp} ${wUnit()}`;}
-        else if(wm==='bulk'){weightOk=delta>0;lbl=`Gewichtszunahme: ${delta>0?'+':''}${dDisp} ${wUnit()}`;}
-        else{weightOk=Math.abs(delta)<0.5;lbl=`Gewichtsveränderung: ${delta>0?'+':''}${dDisp} ${wUnit()}`;}
+        const wtol=0.1;
+        if(wm==='cut'){weightOk=delta<0||Math.abs(delta)<=wtol;lbl=`Gewichtsverlust: ${delta>0?'+':''}${dDisp} ${wUnit()} (Toleranz ±${wtol} ${wUnit()})`;}
+        else if(wm==='bulk'){weightOk=delta>0||Math.abs(delta)<=wtol;lbl=`Gewichtszunahme: ${delta>0?'+':''}${dDisp} ${wUnit()} (Toleranz ±${wtol} ${wUnit()})`;}
+        else{weightOk=Math.abs(delta)<0.5;lbl=`Gewichtsveränderung: ${delta>0?'+':''}${dDisp} ${wUnit()}` ;}
       }
       rows+=badge(lbl,weightOk);
     }
@@ -1181,19 +1184,22 @@ async function addEntry(){
   const weight=fromDisplay(weightDisp);
   const kcal=parseInt(document.getElementById('in-kcal').value)||null;
   const steps=parseInt(document.getElementById('in-steps').value)||null;
+  const protein=parseInt(document.getElementById('in-protein').value)||null;
+  const carbs=parseInt(document.getElementById('in-carbs').value)||null;
+  const fat=parseInt(document.getElementById('in-fat').value)||null;
   const gym=document.getElementById('in-gym').checked;
   if(!date||isNaN(weight)){toast('⚠ Datum und Gewicht sind Pflichtfelder');return;}
   const existing=entries.find(e=>e.date===date);
   if(existing){
-    const {error}=await sb.from('entries').update({weight,kcal,steps,gym}).eq('id',existing._id);
+    const {error}=await sb.from('entries').update({weight,kcal,steps,gym,protein,carbs,fat}).eq('id',existing._id);
     if(error){toast('⚠ '+error.message);return;}
-    Object.assign(existing,{weight,kcal,steps,gym});toast('✓ Eintrag aktualisiert');
+    Object.assign(existing,{weight,kcal,steps,gym,protein,carbs,fat});toast('✓ Eintrag aktualisiert');
   }else{
     const {data,error}=await sb.from('entries').insert([{user_id:currentUser.id,date,weight,kcal,steps,gym}]).select().single();
     if(error){toast('⚠ '+error.message);return;}
-    entries.push({date,weight,kcal,steps,gym,_id:data.id});entries.sort((a,b)=>a.date.localeCompare(b.date));toast('✓ Eintrag gespeichert');
+    entries.push({date,weight,kcal,steps,gym,protein,carbs,fat,_id:data.id});entries.sort((a,b)=>a.date.localeCompare(b.date));toast('✓ Eintrag gespeichert');
   }
-  document.getElementById('in-weight').value='';document.getElementById('in-kcal').value='';document.getElementById('in-steps').value='';document.getElementById('in-gym').checked=false;
+  document.getElementById('in-weight').value='';document.getElementById('in-kcal').value='';document.getElementById('in-steps').value='';document.getElementById('in-gym').checked=false;document.getElementById('in-protein').value='';document.getElementById('in-carbs').value='';document.getElementById('in-fat').value='';
   renderAll();
 }
 
@@ -1258,8 +1264,8 @@ async function saveProfile(){
 }
 
 function exportCSV(){
-  const lines=['Datum,Gewicht (kg),Kalorien,Schritte,Gym'];
-  entries.forEach(e=>lines.push([e.date,e.weight??'',e.kcal??'',e.steps??'',e.gym?'Ja':'Nein'].join(',')));
+  const lines=['Datum,Gewicht (kg),Kalorien,Protein (g),Kohlenhydrate (g),Fett (g),Schritte,Gym'];
+  entries.forEach(e=>lines.push([e.date,e.weight??'',e.kcal??'',e.protein??'',e.carbs??'',e.fat??'',e.steps??'',e.gym?'Ja':'Nein'].join(',')));
   const blob=new Blob([lines.join('\n')],{type:'text/csv'});
   const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='physique_logbook_export.csv';a.click();
   toast('✓ CSV exportiert');
