@@ -863,17 +863,67 @@ function switchChart(tab,el){
 function renderChart(){
   const data=entries; if(!data.length) return;
   const labels=data.map(e=>fmtDate(e.date));
+  if(mainChart){mainChart.destroy();mainChart=null;}
+  const ctx=document.getElementById('mainChart').getContext('2d');
+  const tooltipDefaults={backgroundColor:'#1c1f23',borderColor:'#353a40',borderWidth:1,titleColor:'#8b8f96',bodyColor:'#e8eaed',titleFont:{family:'DM Mono',size:11},bodyFont:{family:'DM Mono',size:12}};
+  const scaleDefaults={x:{ticks:{color:'#555a62',font:{family:'DM Mono',size:10},maxRotation:45,autoSkip:true,maxTicksLimit:14},grid:{color:'rgba(255,255,255,0.04)'}},y:{ticks:{color:'#555a62',font:{family:'DM Mono',size:11}},grid:{color:'rgba(255,255,255,0.04)'}}};
+
+  // MAKROS: 3 datasets in one chart
+  if(activeTab==='macros'){
+    const hasMacros=data.some(e=>e.protein||e.carbs||e.fat);
+    if(!hasMacros){
+      document.getElementById('chart-legend').innerHTML='<span style="color:var(--text3);font-family:\'DM Mono\',monospace;font-size:12px">Noch keine Makro-Daten eingetragen.</span>';
+      return;
+    }
+    mainChart=new Chart(ctx,{
+      type:'line',
+      data:{labels,datasets:[
+        {label:'Protein',data:data.map(e=>e.protein??null),borderColor:'#4fa8ff',backgroundColor:'#4fa8ff18',pointRadius:3,pointBackgroundColor:data.map(e=>e.gym?'#ffffff':'#4fa8ff'),tension:0.4,fill:false,borderWidth:2,spanGaps:true},
+        {label:'Kohlenhydrate',data:data.map(e=>e.carbs??null),borderColor:'#A855F7',backgroundColor:'#A855F718',pointRadius:3,pointBackgroundColor:data.map(e=>e.gym?'#ffffff':'#A855F7'),tension:0.4,fill:false,borderWidth:2,spanGaps:true},
+        {label:'Fett',data:data.map(e=>e.fat??null),borderColor:'#ff6b35',backgroundColor:'#ff6b3518',pointRadius:3,pointBackgroundColor:data.map(e=>e.gym?'#ffffff':'#ff6b35'),tension:0.4,fill:false,borderWidth:2,spanGaps:true},
+      ]},
+      options:{
+        responsive:true,maintainAspectRatio:false,
+        plugins:{
+          legend:{display:false},
+          tooltip:{...tooltipDefaults,callbacks:{
+            title:c=>fmtDate(data[c[0].dataIndex].date)+(data[c[0].dataIndex].gym?' 🏋️':''),
+            label:c=>c.parsed.y!=null?` ${c.dataset.label}: ${c.parsed.y}g`:'–'
+          }}
+        },
+        scales:{
+          x:scaleDefaults.x,
+          y:{...scaleDefaults.y,title:{display:true,text:'g',color:'#555a62',font:{family:'DM Mono',size:11}}}
+        }
+      }
+    });
+    document.getElementById('chart-legend').innerHTML=`
+      <span class="chart-legend-item"><span class="legend-dot" style="background:#4fa8ff"></span>Protein</span>
+      <span class="chart-legend-item"><span class="legend-dot" style="background:#A855F7"></span>Kohlenhydrate</span>
+      <span class="chart-legend-item"><span class="legend-dot" style="background:#ff6b35"></span>Fett</span>
+      <span class="chart-legend-item"><span class="legend-dot" style="background:#ffffff"></span>Gym-Tag</span>
+    `;
+    return;
+  }
+
+  // SINGLE LINE CHARTS
   let vals,color,yLabel,unit;
   if(activeTab==='weight'){vals=data.map(e=>toDisplay(e.weight));color='#4fffb0';yLabel=wUnit();unit=wUnit();}
-  else if(activeTab==='kcal'){vals=data.map(e=>e.kcal);color='#A855F7';yLabel='kcal';unit='kcal';}
-  else{vals=data.map(e=>e.steps);color='#4fa8ff';yLabel='Schritte';unit='';}
-  if(mainChart) mainChart.destroy();
-  const ctx=document.getElementById('mainChart').getContext('2d');
+  else if(activeTab==='kcal'){vals=data.map(e=>e.kcal??null);color='#A855F7';yLabel='kcal';unit='kcal';}
+  else{vals=data.map(e=>e.steps??null);color='#4fa8ff';yLabel='Schritte';unit='';}
   const grad=ctx.createLinearGradient(0,0,0,180);grad.addColorStop(0,color+'30');grad.addColorStop(1,color+'00');
-  mainChart=new Chart(ctx,{type:'line',data:{labels,datasets:[{data:vals,borderColor:color,backgroundColor:grad,pointBackgroundColor:data.map(e=>e.gym?'#ffffff':color),pointBorderColor:data.map(e=>e.gym?'#ffffff':color),pointRadius:data.map(e=>e.gym?6:4),pointHoverRadius:7,tension:0.4,fill:true,borderWidth:2,spanGaps:true}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{backgroundColor:'#1c1f23',borderColor:'#353a40',borderWidth:1,titleColor:'#8b8f96',bodyColor:'#e8eaed',titleFont:{family:'DM Mono',size:11},bodyFont:{family:'DM Mono',size:12},callbacks:{title:ctx=>fmtDate(data[ctx[0].dataIndex].date)+(data[ctx[0].dataIndex].gym?' 🏋️':''),label:ctx=>ctx.parsed.y!=null?` ${ctx.parsed.y.toLocaleString('de-DE')} ${unit}`:'–'}}},scales:{x:{ticks:{color:'#555a62',font:{family:'DM Mono',size:10},maxRotation:45,autoSkip:true,maxTicksLimit:14},grid:{color:'rgba(255,255,255,0.04)'}},y:{ticks:{color:'#555a62',font:{family:'DM Mono',size:11}},grid:{color:'rgba(255,255,255,0.04)'},title:{display:true,text:yLabel,color:'#555a62',font:{family:'DM Mono',size:11}}}}}}); 
-  // 4+5. Legend: "Restday" (not "Normaler Tag"), no kcal range items
+  mainChart=new Chart(ctx,{
+    type:'line',
+    data:{labels,datasets:[{data:vals,borderColor:color,backgroundColor:grad,pointBackgroundColor:data.map(e=>e.gym?'#ffffff':color),pointBorderColor:data.map(e=>e.gym?'#ffffff':color),pointRadius:data.map(e=>e.gym?6:4),pointHoverRadius:7,tension:0.4,fill:true,borderWidth:2,spanGaps:true}]},
+    options:{
+      responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:false},tooltip:{...tooltipDefaults,callbacks:{title:c=>fmtDate(data[c[0].dataIndex].date)+(data[c[0].dataIndex].gym?' 🏋️':''),label:c=>c.parsed.y!=null?` ${c.parsed.y.toLocaleString('de-DE')} ${unit}`:'–'}}},
+      scales:{x:scaleDefaults.x,y:{...scaleDefaults.y,title:{display:true,text:yLabel,color:'#555a62',font:{family:'DM Mono',size:11}}}}
+    }
+  });
+  const tabName=yLabel==='kcal'?'Kalorien':yLabel==='Schritte'?'Schritte':'Gewicht';
   document.getElementById('chart-legend').innerHTML=`
-    <span class="chart-legend-item"><span class="legend-line" style="background:${color}"></span>${yLabel==='kg'||yLabel==='lbs'?'Gewicht':yLabel==='kcal'?'Kalorien':'Schritte'}</span>
+    <span class="chart-legend-item"><span class="legend-line" style="background:${color}"></span>${tabName}</span>
     <span class="chart-legend-item"><span class="legend-dot" style="background:#ffffff"></span>Gym-Tag</span>
     <span class="chart-legend-item"><span class="legend-dot" style="background:${color}"></span>Restday</span>
   `;
