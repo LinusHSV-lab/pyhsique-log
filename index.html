@@ -870,9 +870,13 @@ function renderChart(){
 
   // MAKROS: 3 datasets in one chart
   if(activeTab==='macros'){
-    const hasMacros=data.some(e=>e.protein||e.carbs||e.fat);
+    // Clear canvas completely before drawing
+    ctx.clearRect(0,0,ctx.canvas.width,ctx.canvas.height);
+    const hasMacros=data.some(e=>e.protein!=null||e.carbs!=null||e.fat!=null);
     if(!hasMacros){
-      document.getElementById('chart-legend').innerHTML='<span style="color:var(--text3);font-family:\'DM Mono\',monospace;font-size:12px">Noch keine Makro-Daten eingetragen.</span>';
+      document.getElementById('chart-legend').innerHTML='<span style="color:var(--text3);font-family:\'DM Mono\',monospace;font-size:12px">⚠ Noch keine Makros eingetragen. Füge Protein, Carbs und Fett beim Eintrag hinzu.</span>';
+      // Draw empty axes placeholder
+      mainChart=new Chart(ctx,{type:'line',data:{labels,datasets:[{label:'Protein',data:data.map(()=>null),borderColor:'#4fa8ff',spanGaps:false},{label:'Kohlenhydrate',data:data.map(()=>null),borderColor:'#A855F7',spanGaps:false},{label:'Fett',data:data.map(()=>null),borderColor:'#ff6b35',spanGaps:false}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{enabled:false}},scales:{x:{ticks:{color:'#555a62',font:{family:'DM Mono',size:10},maxRotation:45,autoSkip:true,maxTicksLimit:14},grid:{color:'rgba(255,255,255,0.04)'}},y:{display:false}}}});
       return;
     }
     mainChart=new Chart(ctx,{
